@@ -1,0 +1,217 @@
+"use client";
+
+import { useState } from "react";
+import { Search, Filter, Plus, UserPlus, Eye, ChevronDown } from "lucide-react";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/types";
+import type { OrderStatus } from "@/types";
+import { MOCK_ADMIN_ORDERS, MOCK_DRIVERS, DRIVER_STATUS_COLORS } from "@/constants/mock-data";
+
+const statusFilters = [
+  { value: "all", label: "הכל" },
+  { value: "pending", label: "ממתין" },
+  { value: "confirmed", label: "אושר" },
+  { value: "assigned", label: "שובץ" },
+  { value: "picked_up", label: "נאסף" },
+  { value: "in_transit", label: "בדרך" },
+  { value: "delivered", label: "נמסר" },
+  { value: "cancelled", label: "בוטל" },
+];
+
+export default function AdminOrdersPage() {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assigningOrderId, setAssigningOrderId] = useState<string | null>(null);
+
+  const filtered = MOCK_ADMIN_ORDERS.filter((order) => {
+    const matchesSearch =
+      !search ||
+      order.order_number.toLowerCase().includes(search.toLowerCase()) ||
+      order.customer_name.includes(search);
+    const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const pendingCount = MOCK_ADMIN_ORDERS.filter((o) => o.status === "pending").length;
+  const activeCount = MOCK_ADMIN_ORDERS.filter((o) => ["assigned", "picked_up", "in_transit"].includes(o.status)).length;
+
+  function handleAssignDriver(driverId: string) {
+    // TODO: Update in Supabase
+    setShowAssignModal(false);
+    setAssigningOrderId(null);
+  }
+
+  return (
+    <div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-primary">ניהול הזמנות</h1>
+          <p className="text-muted text-sm">
+            {pendingCount} ממתינות | {activeCount} פעילות | {MOCK_ADMIN_ORDERS.length} סה&quot;כ
+          </p>
+        </div>
+        <button className="btn-primary text-sm">
+          <Plus className="w-4 h-4" />
+          הזמנה חדשה
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="card !p-4 mb-6">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="חיפוש לפי מספר הזמנה, לקוח..."
+              className="input-field !pr-10"
+            />
+          </div>
+          <div className="flex gap-2 flex-wrap items-center">
+            <Filter className="w-4 h-4 text-muted shrink-0" />
+            {statusFilters.map((filter) => (
+              <button
+                key={filter.value}
+                onClick={() => setStatusFilter(filter.value)}
+                className={`px-3 py-1.5 text-xs rounded-lg transition-colors whitespace-nowrap ${
+                  statusFilter === filter.value
+                    ? "bg-primary text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Orders Table */}
+      <div className="card !p-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-border">
+                <th className="text-right p-4 font-medium text-muted">מספר הזמנה</th>
+                <th className="text-right p-4 font-medium text-muted">לקוח</th>
+                <th className="text-right p-4 font-medium text-muted">מוצא</th>
+                <th className="text-right p-4 font-medium text-muted">יעד</th>
+                <th className="text-right p-4 font-medium text-muted">נהג</th>
+                <th className="text-right p-4 font-medium text-muted">סטטוס</th>
+                <th className="text-right p-4 font-medium text-muted">שירות</th>
+                <th className="text-right p-4 font-medium text-muted">מחיר</th>
+                <th className="text-right p-4 font-medium text-muted">תאריך</th>
+                <th className="text-right p-4 font-medium text-muted">פעולות</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((order) => (
+                <tr
+                  key={order.id}
+                  className={`border-b border-border/50 hover:bg-gray-50 cursor-pointer ${
+                    selectedOrder === order.id ? "bg-blue-50" : ""
+                  }`}
+                  onClick={() => setSelectedOrder(selectedOrder === order.id ? null : order.id)}
+                >
+                  <td className="p-4 font-mono text-xs font-bold" dir="ltr">
+                    {order.order_number}
+                  </td>
+                  <td className="p-4 font-medium">{order.customer_name}</td>
+                  <td className="p-4 text-xs text-muted max-w-[150px] truncate">{order.pickup_address}</td>
+                  <td className="p-4 text-xs text-muted max-w-[150px] truncate">{order.delivery_address}</td>
+                  <td className="p-4">
+                    {order.driver_name ? (
+                      <span className="text-sm">{order.driver_name}</span>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAssigningOrderId(order.id);
+                          setShowAssignModal(true);
+                        }}
+                        className="flex items-center gap-1 text-xs text-secondary hover:text-secondary-dark font-medium"
+                      >
+                        <UserPlus className="w-3 h-3" />
+                        שבץ נהג
+                      </button>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    <span
+                      className="px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap"
+                      style={{
+                        backgroundColor: `${ORDER_STATUS_COLORS[order.status]}15`,
+                        color: ORDER_STATUS_COLORS[order.status],
+                      }}
+                    >
+                      {ORDER_STATUS_LABELS[order.status]}
+                    </span>
+                  </td>
+                  <td className="p-4 text-xs text-muted capitalize">{order.service_type.replace("_", " ")}</td>
+                  <td className="p-4 font-bold">{order.estimated_price}₪</td>
+                  <td className="p-4 text-xs text-muted" dir="ltr">
+                    {new Date(order.created_at).toLocaleDateString("he-IL")}
+                  </td>
+                  <td className="p-4">
+                    <button className="p-1.5 text-gray-400 hover:text-primary hover:bg-gray-100 rounded-lg">
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {filtered.length === 0 && (
+          <div className="text-center py-12 text-muted">לא נמצאו הזמנות</div>
+        )}
+      </div>
+
+      {/* Assign Driver Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowAssignModal(false)} />
+          <div className="relative bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <h2 className="text-lg font-bold text-primary mb-4">שיבוץ נהג</h2>
+            <p className="text-sm text-muted mb-4">בחרו נהג להזמנה #{MOCK_ADMIN_ORDERS.find(o => o.id === assigningOrderId)?.order_number}</p>
+
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {MOCK_DRIVERS.filter((d) => d.status !== "offline").map((driver) => (
+                <button
+                  key={driver.id}
+                  onClick={() => handleAssignDriver(driver.id)}
+                  className="w-full flex items-center justify-between p-3 rounded-xl border border-border hover:border-secondary hover:bg-secondary/5 transition-colors text-right"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: DRIVER_STATUS_COLORS[driver.status] }}
+                    />
+                    <div>
+                      <div className="font-medium text-sm">{driver.name}</div>
+                      <div className="text-xs text-muted">{driver.vehicle} | {driver.zone}</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted">
+                    {driver.todayDeliveries} משלוחים היום
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setShowAssignModal(false)}
+              className="btn-secondary w-full mt-4"
+            >
+              ביטול
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
