@@ -53,7 +53,6 @@ export interface Profile {
   id: string;
   full_name: string;
   phone: string;
-  email: string;
   role: UserRole;
   avatar_url: string | null;
 }
