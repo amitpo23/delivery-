@@ -56,7 +56,7 @@ export default function Header() {
             <Link href="/login" className="btn-secondary text-sm !py-2 !px-4">
               כניסה
             </Link>
-            <Link href="/order" className="btn-primary text-sm !py-2 !px-4">
+            <Link href="/booking" className="btn-primary text-sm !py-2 !px-4">
               הזמן משלוח
             </Link>
           </div>
@@ -95,7 +95,7 @@ export default function Header() {
                 כניסה
               </Link>
               <Link
-                href="/order"
+                href="/booking"
                 onClick={() => setIsMenuOpen(false)}
                 className="btn-primary text-center"
               >

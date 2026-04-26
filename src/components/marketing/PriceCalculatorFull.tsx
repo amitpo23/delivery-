@@ -190,7 +190,7 @@ export default function PriceCalculatorFull() {
                 <span className="text-3xl font-bold text-primary">{formatPrice(result.total)}</span>
               </div>
 
-              <Link href="/order" className="btn-primary w-full text-center mt-4">
+              <Link href="/booking" className="btn-primary w-full text-center mt-4">
                 להזמנת משלוח
                 <ArrowLeft className="w-4 h-4" />
               </Link>

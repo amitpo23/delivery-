@@ -81,7 +81,7 @@ export default function OrdersPage() {
     <div>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-primary">ההזמנות שלי</h1>
-        <Link href="/order" className="btn-primary text-sm">
+        <Link href="/booking" className="btn-primary text-sm">
           <Package className="w-4 h-4" />
           הזמנה חדשה
         </Link>

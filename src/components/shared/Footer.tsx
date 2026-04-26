@@ -67,7 +67,7 @@ export default function Footer() {
               <Link href="/services#economy" className="text-white/70 hover:text-white transition-colors text-sm">
                 משלוח חסכוני
               </Link>
-              <Link href="/order" className="text-secondary hover:text-secondary-light transition-colors text-sm font-medium">
+              <Link href="/booking" className="text-secondary hover:text-secondary-light transition-colors text-sm font-medium">
                 הזמן משלוח עכשיו
               </Link>
             </nav>

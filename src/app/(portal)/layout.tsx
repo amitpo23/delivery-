@@ -28,7 +28,7 @@ export default function PortalLayout({
               דשבורד
             </Link>
             <Link
-              href="/order"
+              href="/booking"
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 hover:text-primary transition-colors"
             >
               <PlusCircle className="w-4 h-4" />
@@ -67,7 +67,7 @@ export default function PortalLayout({
             <LayoutDashboard className="w-5 h-5" />
             <span className="text-xs">דשבורד</span>
           </Link>
-          <Link href="/order" className="flex flex-col items-center gap-1 py-1 px-3 text-gray-500 hover:text-primary">
+          <Link href="/booking" className="flex flex-col items-center gap-1 py-1 px-3 text-gray-500 hover:text-primary">
             <PlusCircle className="w-5 h-5" />
             <span className="text-xs">הזמנה</span>
           </Link>

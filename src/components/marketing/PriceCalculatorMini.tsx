@@ -113,7 +113,7 @@ export default function PriceCalculatorMini() {
             <div className="text-sm text-green-700">מחיר משוער (כולל מע&quot;מ)</div>
             <div className="text-3xl font-bold text-green-800">{formatPrice(result)}</div>
           </div>
-          <Link href="/order" className="btn-primary !bg-green-600 hover:!bg-green-700">
+          <Link href="/booking" className="btn-primary !bg-green-600 hover:!bg-green-700">
             להזמנה
             <ArrowLeft className="w-4 h-4" />
           </Link>

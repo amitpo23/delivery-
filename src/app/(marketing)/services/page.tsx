@@ -119,7 +119,7 @@ export default function ServicesPage() {
                         <span className="text-sm text-muted">החל מ-</span>
                         <span className="text-3xl font-bold text-primary mr-1">{service.basePrice}₪</span>
                       </div>
-                      <Link href="/order" className="btn-primary">
+                      <Link href="/booking" className="btn-primary">
                         הזמן עכשיו
                         <ArrowLeft className="w-4 h-4" />
                       </Link>
@@ -190,7 +190,7 @@ export default function ServicesPage() {
                   <td className="p-4 font-medium"></td>
                   {SERVICE_TYPES.map((s) => (
                     <td key={s.id} className="p-4 text-center">
-                      <Link href="/order" className="btn-primary text-sm !py-2 !px-4">
+                      <Link href="/booking" className="btn-primary text-sm !py-2 !px-4">
                         הזמן
                       </Link>
                     </td>
