@@ -22,7 +22,11 @@ export class TelegramSender implements NotificationSender {
 
   async send(req: NotificationRequest): Promise<NotificationResult> {
     const { title, body } = renderMessage(req.template, req.payload);
-    const text = title === body ? body : `*${title}*\n\n${body}`;
+    // Plain text — no parse_mode. Markdown/HTML escaping for arbitrary user
+    // input (Hebrew addresses, customer-supplied notes) is footgun-prone and
+    // a single unbalanced "_" or "*" makes Telegram return HTTP 400 and the
+    // notification silently fails.
+    const text = title === body ? body : `${title}\n\n${body}`;
 
     if (this.isStub) {
       return {
@@ -41,7 +45,6 @@ export class TelegramSender implements NotificationSender {
         body: JSON.stringify({
           chat_id: req.recipient,
           text,
-          parse_mode: "Markdown",
           disable_web_page_preview: true,
         }),
       });

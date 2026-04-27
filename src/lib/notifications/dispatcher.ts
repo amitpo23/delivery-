@@ -126,11 +126,18 @@ async function planSends(
         addAdmin("order.pending_admin_attention");
       }
       break;
+    case "confirmed":
+      // Admin confirmed the booking but no driver yet — quiet by design.
+      // Customer was already notified on creation; driver doesn't exist.
+      break;
     case "assigned":
       addCustomer("order.assigned.customer");
       addDriver("order.assigned.driver");
       break;
     case "picked_up":
+      addCustomer("order.picked_up");
+      break;
+    case "in_transit":
       addCustomer("order.picked_up");
       break;
     case "delivered":

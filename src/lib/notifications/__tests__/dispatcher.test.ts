@@ -191,6 +191,33 @@ describe("dispatcher", () => {
     expect(out.details[0].channel).toBe("whatsapp");
   });
 
+  it("in_transit -> notifies customer (was silently dropped before)", async () => {
+    const { supabase } = makeFakeSupabase({ adminChats: ["100"] });
+    const out = await dispatchOrderEvent(
+      {
+        type: "UPDATE",
+        newRow: baseOrder({ status: "in_transit" }),
+        oldRow: baseOrder({ status: "picked_up" }),
+      },
+      supabase
+    );
+    expect(out.planned).toBe(1);
+    expect(out.details[0].channel).toBe("whatsapp");
+  });
+
+  it("confirmed -> intentionally quiet", async () => {
+    const { supabase } = makeFakeSupabase({ adminChats: ["100"] });
+    const out = await dispatchOrderEvent(
+      {
+        type: "UPDATE",
+        newRow: baseOrder({ status: "confirmed" }),
+        oldRow: baseOrder({ status: "pending" }),
+      },
+      supabase
+    );
+    expect(out.planned).toBe(0);
+  });
+
   it("cancelled -> customer + admins", async () => {
     const { supabase } = makeFakeSupabase({ adminChats: ["100", "200"] });
     const out = await dispatchOrderEvent(
