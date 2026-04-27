@@ -16,9 +16,11 @@ describe("calculatePrice — formula correctness", () => {
       size: "S",
       urgency: "next_day",
     });
-    // base 20, distance 0, factors all 1.0 → subtotal 20, VAT 3.4, total round(23.4) = 23
+    // base 20, distance 0, factors all 1.0 → subtotal 20, VAT 3.4, total 23.4
     expect(q.subtotal).toBe(20);
-    expect(q.total).toBe(23);
+    expect(q.vat).toBeCloseTo(3.4, 2);
+    expect(q.total).toBeCloseTo(23.4, 2);
+    expect(q.total).toBeCloseTo(q.subtotal + q.vat, 2);
     expect(q.currency).toBe("ILS");
   });
 
@@ -30,10 +32,12 @@ describe("calculatePrice — formula correctness", () => {
       size: "S",
       urgency: "next_day",
     });
-    // base 20 + 10*1.0 = 30, VAT 5.1, total 35
+    // base 20 + 10*1.0 = 30, VAT 5.1, total 35.1
     expect(q.distanceCost).toBe(10);
     expect(q.subtotal).toBe(30);
-    expect(q.total).toBe(35);
+    expect(q.vat).toBeCloseTo(5.1, 2);
+    expect(q.total).toBeCloseTo(35.1, 2);
+    expect(q.total).toBeCloseTo(q.subtotal + q.vat, 2);
   });
 
   it("uses the more expensive zone for rates (delivery wins)", () => {
@@ -165,7 +169,24 @@ describe("calculatePrice — formula correctness", () => {
       urgency: "next_day",
     });
     expect(q.vat).toBeCloseTo(q.subtotal * VAT_RATE, 1);
-    expect(q.total).toBe(Math.round(q.subtotal + q.vat));
+    expect(q.total).toBeCloseTo(q.subtotal + q.vat, 2);
+  });
+
+  it("total === subtotal + vat exactly across the matrix (rounding regression)", () => {
+    const cases = [
+      { distanceKm: 0, size: "S" as const, urgency: "next_day" as const },
+      { distanceKm: 17, size: "M" as const, urgency: "express" as const, fragile: true },
+      { distanceKm: 50, size: "L" as const, urgency: "same_day" as const, insurance: true, declaredValue: 750 },
+      { distanceKm: 99, size: "XL" as const, urgency: "economy" as const, surge: 1.4 },
+    ];
+    for (const c of cases) {
+      const q = calculatePrice({
+        pickupZone: haifa,
+        deliveryZone: beitShean,
+        ...c,
+      });
+      expect(q.total).toBeCloseTo(q.subtotal + q.vat, 2);
+    }
   });
 
   it("crossing zones takes the higher multiplier", () => {

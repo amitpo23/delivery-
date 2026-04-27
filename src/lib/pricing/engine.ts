@@ -86,9 +86,12 @@ export function calculatePrice(req: PriceRequest): PriceQuote {
       ? Math.max(INSURANCE_MIN, round2(req.declaredValue * INSURANCE_RATE))
       : 0;
 
+  // All three line items are rounded to 2 decimals and `total === subtotal + vat`
+  // to the agora. Previously total was Math.round'd to a whole shekel, which
+  // could disagree with the displayed (subtotal + vat) by up to ±0.49 ILS.
   const subtotal = round2(core + fragileSurcharge + insuranceFee);
   const vat = round2(subtotal * VAT_RATE);
-  const total = Math.round(subtotal + vat);
+  const total = round2(subtotal + vat);
 
   return {
     basePrice,
