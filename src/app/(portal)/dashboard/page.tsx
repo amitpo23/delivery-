@@ -56,7 +56,7 @@ export default function DashboardPage() {
           <h1 className="text-2xl md:text-3xl font-bold text-primary">שלום, אליהב!</h1>
           <p className="text-muted mt-1">ברוך הבא למערכת ההזמנות שלך</p>
         </div>
-        <Link href="/order" className="btn-primary">
+        <Link href="/booking" className="btn-primary">
           <PlusCircle className="w-5 h-5" />
           הזמנה חדשה
         </Link>

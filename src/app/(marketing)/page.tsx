@@ -29,7 +29,7 @@ export default function HomePage() {
               משלוח אקספרס תוך שעות, מעקב בזמן אמת ומחירים הוגנים.
             </p>
             <div className="flex flex-wrap gap-4">
-              <Link href="/order" className="btn-primary text-lg !py-3 !px-8">
+              <Link href="/booking" className="btn-primary text-lg !py-3 !px-8">
                 הזמן משלוח עכשיו
                 <ArrowLeft className="w-5 h-5" />
               </Link>
@@ -196,7 +196,7 @@ export default function HomePage() {
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link
-              href="/order"
+              href="/booking"
               className="inline-flex items-center gap-2 px-8 py-3 bg-white text-secondary font-bold rounded-xl hover:bg-gray-100 transition-all text-lg"
             >
               הזמן משלוח
