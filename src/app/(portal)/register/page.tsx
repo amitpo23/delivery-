@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Package, Mail, Lock, User, Phone, Eye, EyeOff } from "lucide-react";
 import { COMPANY_SHORT } from "@/constants/services";
+import { createClient } from "@/lib/supabase/client";
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -44,13 +45,45 @@ export default function RegisterPage() {
     }
 
     try {
-      // TODO: Supabase auth signup
-      // const { error } = await supabase.auth.signUp({
-      //   email: formData.email,
-      //   password: formData.password,
-      //   options: { data: { full_name: formData.fullName, phone: formData.phone } }
-      // });
-      window.location.href = "/dashboard";
+      const supabase = createClient();
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.fullName,
+            phone: formData.phone,
+            role: "customer",
+          },
+        },
+      });
+
+      if (signUpError || !data.user) {
+        // Supabase returns "User already registered" for existing emails — surface
+        // a localized message instead of leaking the raw error.
+        setError(
+          signUpError?.message?.includes("already")
+            ? "המייל הזה כבר רשום במערכת. עברו להתחברות."
+            : "שגיאה ביצירת החשבון. נסו שוב.",
+        );
+        return;
+      }
+
+      // Best-effort: create the customer row. handle_new_user() trigger created
+      // the profile from raw_user_meta_data; the customer record is portal-only
+      // metadata that requires an authenticated session (RLS: user_id = auth.uid()).
+      // If the email-confirmation flow is enabled the session won't exist yet —
+      // treat the failure as non-fatal and let the user complete it on first login.
+      if (data.session) {
+        await supabase.from("customers").insert({
+          user_id: data.user.id,
+          customer_type: formData.customerType,
+          company_name: formData.customerType === "business" ? formData.companyName || null : null,
+        });
+        window.location.href = "/dashboard";
+      } else {
+        setError("נשלח אליך אימייל לאישור החשבון. אשרו אותו ואז התחברו.");
+      }
     } catch {
       setError("שגיאה ביצירת החשבון. נסו שוב.");
     } finally {

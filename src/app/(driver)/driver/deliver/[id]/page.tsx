@@ -1,33 +1,69 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Pen, CheckCircle2, ArrowRight, X, RotateCcw } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 interface DeliverPageProps {
   params: Promise<{ id: string }>;
 }
 
+interface OrderInfo {
+  orderNumber: string;
+  address: string;
+  contactName: string;
+  contactPhone: string;
+  packageSize: string | null;
+  status: string;
+}
+
 export default function DeliverPage({ params }: DeliverPageProps) {
   const router = useRouter();
-  const [photo, setPhoto] = useState<string | null>(null);
+  const { id: orderId } = use(params);
+
+  const [order, setOrder] = useState<OrderInfo | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [isDrawing, setIsDrawing] = useState(false);
   const [showSignature, setShowSignature] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const orderInfo = {
-    orderNumber: "DEL-A1B2C3-X1",
-    address: "כרמיאל, רח' הגליל 22",
-    contactName: "מירי לוי",
-    contactPhone: "050-8888888",
-    packageType: "חבילה קטנה",
-  };
+  useEffect(() => {
+    (async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("orders")
+        .select(
+          `order_number, status,
+           delivery_address, delivery_contact_name, delivery_contact_phone,
+           package_size`,
+        )
+        .eq("id", orderId)
+        .maybeSingle();
+      if (error || !data) {
+        setLoadError("הזמנה לא נמצאה");
+        return;
+      }
+      setOrder({
+        orderNumber: data.order_number,
+        address: data.delivery_address,
+        contactName: data.delivery_contact_name,
+        contactPhone: data.delivery_contact_phone,
+        packageSize: data.package_size,
+        status: data.status,
+      });
+    })();
+  }, [orderId]);
 
-  // Canvas drawing for signature
   useEffect(() => {
     if (showSignature && canvasRef.current) {
       const canvas = canvasRef.current;
@@ -102,7 +138,7 @@ export default function DeliverPage({ params }: DeliverPageProps) {
 
   function saveSignature() {
     if (canvasRef.current) {
-      setSignature(canvasRef.current.toDataURL());
+      setSignature(canvasRef.current.toDataURL("image/png"));
       setShowSignature(false);
     }
   }
@@ -120,20 +156,44 @@ export default function DeliverPage({ params }: DeliverPageProps) {
   function handlePhotoCapture(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
+      setPhotoFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhoto(reader.result as string);
-      };
+      reader.onloadend = () => setPhotoPreview(reader.result as string);
       reader.readAsDataURL(file);
     }
   }
 
-  function handleSubmit() {
-    // TODO: Upload to Supabase Storage + update order status
-    setSubmitted(true);
-    setTimeout(() => {
-      router.push("/driver/tasks");
-    }, 2000);
+  async function handleSubmit() {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const form = new FormData();
+      if (photoFile) form.append("photo", photoFile);
+      if (signature) form.append("signature", signature);
+      if (notes) form.append("notes", notes);
+
+      const res = await fetch(`/api/driver/orders/${orderId}/deliver`, {
+        method: "POST",
+        body: form,
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setSubmitError(json.error || "שליחה נכשלה");
+        return;
+      }
+      setSubmitted(true);
+      setTimeout(() => router.push("/driver/tasks"), 1500);
+    } catch {
+      setSubmitError("שגיאת רשת. נסה שוב.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (loadError) {
+    return (
+      <div className="text-center py-20 text-red-600">{loadError}</div>
+    );
   }
 
   if (submitted) {
@@ -148,6 +208,10 @@ export default function DeliverPage({ params }: DeliverPageProps) {
     );
   }
 
+  if (!order) {
+    return <div className="text-center py-20 text-muted">טוען...</div>;
+  }
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
@@ -156,41 +220,40 @@ export default function DeliverPage({ params }: DeliverPageProps) {
         </button>
         <div>
           <h1 className="text-xl font-bold text-primary">אישור מסירה</h1>
-          <p className="text-sm text-muted" dir="ltr">#{orderInfo.orderNumber}</p>
+          <p className="text-sm text-muted" dir="ltr">#{order.orderNumber}</p>
         </div>
       </div>
 
-      {/* Order Info */}
       <div className="card !p-4 mb-4">
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-muted">כתובת:</span>
-            <span className="font-medium">{orderInfo.address}</span>
+            <span className="font-medium">{order.address}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted">מקבל:</span>
-            <span className="font-medium">{orderInfo.contactName}</span>
+            <span className="font-medium">{order.contactName}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted">חבילה:</span>
-            <span className="font-medium">{orderInfo.packageType}</span>
+            <span className="font-medium">{order.packageSize ?? "—"}</span>
           </div>
         </div>
       </div>
 
       <div className="space-y-4">
-        {/* Photo Capture */}
         <div className="card !p-4">
           <h3 className="text-sm font-bold text-primary mb-3 flex items-center gap-2">
             <Camera className="w-4 h-4 text-secondary" />
             תמונת הוכחת מסירה
           </h3>
 
-          {photo ? (
+          {photoPreview ? (
             <div className="relative">
-              <img src={photo} alt="POD" className="w-full h-48 object-cover rounded-xl" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photoPreview} alt="POD" className="w-full h-48 object-cover rounded-xl" />
               <button
-                onClick={() => setPhoto(null)}
+                onClick={() => { setPhotoPreview(null); setPhotoFile(null); }}
                 className="absolute top-2 left-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center"
               >
                 <X className="w-4 h-4" />
@@ -215,7 +278,6 @@ export default function DeliverPage({ params }: DeliverPageProps) {
           />
         </div>
 
-        {/* Signature */}
         <div className="card !p-4">
           <h3 className="text-sm font-bold text-primary mb-3 flex items-center gap-2">
             <Pen className="w-4 h-4 text-secondary" />
@@ -224,6 +286,7 @@ export default function DeliverPage({ params }: DeliverPageProps) {
 
           {signature ? (
             <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={signature} alt="Signature" className="w-full h-24 object-contain bg-white rounded-xl border border-border" />
               <button
                 onClick={() => { setSignature(null); setShowSignature(true); }}
@@ -269,7 +332,6 @@ export default function DeliverPage({ params }: DeliverPageProps) {
           )}
         </div>
 
-        {/* Notes */}
         <div className="card !p-4">
           <label className="text-sm font-bold text-primary mb-2 block">הערות (אופציונלי)</label>
           <textarea
@@ -281,14 +343,19 @@ export default function DeliverPage({ params }: DeliverPageProps) {
           />
         </div>
 
-        {/* Submit */}
+        {submitError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+            {submitError}
+          </div>
+        )}
+
         <button
           onClick={handleSubmit}
-          disabled={!photo && !signature}
+          disabled={(!photoFile && !signature) || submitting}
           className="btn-primary w-full text-lg !py-4 !bg-green-600 hover:!bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <CheckCircle2 className="w-5 h-5" />
-          אישור מסירה
+          {submitting ? "שולח..." : "אישור מסירה"}
         </button>
         <p className="text-xs text-muted text-center">
           יש לצלם תמונה או לקבל חתימה לפני אישור המסירה

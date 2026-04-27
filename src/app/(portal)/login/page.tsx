@@ -1,16 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Package, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { COMPANY_SHORT } from "@/constants/services";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <LoginInner />
+    </Suspense>
+  );
+}
+
+function LoginInner() {
+  const params = useSearchParams();
+  const reason = params.get("reason");
+  const redirectTo = params.get("redirect");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (reason === "auth_unconfigured") {
+      setError("שירות ההתחברות אינו זמין כרגע. נסו שוב מאוחר יותר.");
+    }
+  }, [reason]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -18,13 +38,35 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // TODO: Supabase auth
-      // const { error } = await supabase.auth.signInWithPassword({ email, password });
-      // if (error) throw error;
-      // redirect to dashboard
-      window.location.href = "/dashboard";
+      const supabase = createClient();
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (signInError || !data.user) {
+        setError("שם משתמש או סיסמה שגויים");
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .single();
+
+      const target =
+        redirectTo ??
+        (profile?.role === "admin"
+          ? "/admin/orders"
+          : profile?.role === "driver"
+            ? "/driver/tasks"
+            : "/dashboard");
+
+      // window.location forces a full reload so the middleware re-reads the
+      // new session cookie before deciding what to render.
+      window.location.href = target;
     } catch {
-      setError("שם משתמש או סיסמה שגויים");
+      setError("שגיאה בהתחברות. נסו שוב.");
     } finally {
       setLoading(false);
     }
@@ -33,7 +75,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2">
             <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
@@ -44,7 +85,6 @@ export default function LoginPage() {
           <p className="text-muted mt-1">התחברו לחשבון שלכם</p>
         </div>
 
-        {/* Form */}
         <div className="card !p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
