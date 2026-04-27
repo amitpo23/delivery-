@@ -1,6 +1,6 @@
 import { SumitProvider } from "./sumit";
 import { GrowProvider } from "./grow";
-import type { PaymentProvider } from "./types";
+import { PaymentError, type PaymentProvider } from "./types";
 
 export * from "./types";
 export { SumitProvider, GrowProvider };
@@ -18,7 +18,10 @@ export function getPaymentProvider(): PaymentProvider {
 }
 
 /**
- * Charges through the primary provider; falls back to the secondary on error.
+ * Charges through the primary provider; falls back to the secondary on
+ * transient/network errors. Validation errors (PaymentError with retryable=false)
+ * are surfaced to the caller — the fallback would just hit the same problem,
+ * and the original error is more actionable.
  */
 export async function chargeWithFallback(
   primary: PaymentProvider,
@@ -27,7 +30,8 @@ export async function chargeWithFallback(
 ): Promise<import("./types").ChargeResult> {
   try {
     return await primary.createCharge(req);
-  } catch {
+  } catch (err) {
+    if (err instanceof PaymentError && err.retryable === false) throw err;
     return await fallback.createCharge(req);
   }
 }

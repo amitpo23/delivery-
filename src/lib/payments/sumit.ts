@@ -29,7 +29,7 @@ export class SumitProvider implements PaymentProvider {
 
   async createCharge(req: ChargeRequest): Promise<ChargeResult> {
     if (req.amount <= 0) {
-      throw new PaymentError("Amount must be positive", this.name);
+      throw new PaymentError("Amount must be positive", this.name, undefined, false);
     }
     if (this.isStub) {
       const transactionId = `sumit_stub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -63,11 +63,22 @@ export class SumitProvider implements PaymentProvider {
   }
 
   async refundCharge(transactionId: string, amount?: number): Promise<RefundResult> {
+    if (amount === undefined) {
+      // Stub has no record of the original charge amount, so we can't pretend
+      // a full refund happened with a real number. Force the caller to be
+      // explicit until live mode replaces this with a Sumit transaction lookup.
+      throw new PaymentError(
+        "amount is required in stub mode (no original-charge lookup)",
+        this.name,
+        undefined,
+        false
+      );
+    }
     if (this.isStub) {
       return {
         refundId: `sumit_stub_refund_${Date.now()}`,
         transactionId,
-        amount: amount ?? 0,
+        amount,
         status: "succeeded",
       };
     }

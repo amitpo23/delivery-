@@ -20,7 +20,7 @@ export class GrowProvider implements PaymentProvider {
 
   async createCharge(req: ChargeRequest): Promise<ChargeResult> {
     if (req.amount <= 0) {
-      throw new PaymentError("Amount must be positive", this.name);
+      throw new PaymentError("Amount must be positive", this.name, undefined, false);
     }
     if (this.isStub) {
       const now = new Date().toISOString();
@@ -53,11 +53,19 @@ export class GrowProvider implements PaymentProvider {
   }
 
   async refundCharge(transactionId: string, amount?: number): Promise<RefundResult> {
+    if (amount === undefined) {
+      throw new PaymentError(
+        "amount is required in stub mode (no original-charge lookup)",
+        this.name,
+        undefined,
+        false
+      );
+    }
     if (this.isStub) {
       return {
         refundId: `grow_stub_refund_${Date.now()}`,
         transactionId,
-        amount: amount ?? 0,
+        amount,
         status: "succeeded",
       };
     }

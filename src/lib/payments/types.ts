@@ -52,7 +52,11 @@ export class PaymentError extends Error {
   constructor(
     message: string,
     public readonly provider: string,
-    public readonly cause?: unknown
+    public readonly cause?: unknown,
+    /** Validation errors are not retryable — falling back to a different
+     *  provider would just hit the same problem. Default true so that
+     *  network/transient errors still trigger fallback. */
+    public readonly retryable: boolean = true
   ) {
     super(message);
     this.name = "PaymentError";
