@@ -26,6 +26,10 @@ export interface ChargeResult {
   status: ChargeStatus;
   amount: number;
   currency: Currency;
+  /** Last 4 digits of the card as confirmed by the provider. Always trust
+   *  this over a value the client claims, since the client could lie about
+   *  the card it submitted. */
+  cardLast4?: string;
   authorizedAt?: string;
   capturedAt?: string;
   failureReason?: string;

@@ -30,6 +30,7 @@ export class GrowProvider implements PaymentProvider {
         status: "captured",
         amount: req.amount,
         currency: req.currency ?? "ILS",
+        cardLast4: req.card?.last4,
         authorizedAt: now,
         capturedAt: now,
         raw: { stub: true, orderId: req.orderId },
