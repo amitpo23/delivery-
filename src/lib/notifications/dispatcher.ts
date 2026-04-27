@@ -164,7 +164,7 @@ async function runPlans(
 
   for (const plan of plans) {
     const inserted = await insertLogIfNew(plan, orderId, supabase);
-    if (!inserted.created) {
+    if (inserted.duplicate) {
       outcome.skipped++;
       outcome.details.push({
         template: plan.template,
@@ -172,6 +172,17 @@ async function runPlans(
         recipient: plan.recipient,
         status: "skipped",
         failureReason: "Already sent (idempotency)",
+      });
+      continue;
+    }
+    if (!inserted.id) {
+      outcome.failed++;
+      outcome.details.push({
+        template: plan.template,
+        channel: plan.channel,
+        recipient: plan.recipient,
+        status: "failed",
+        failureReason: inserted.error ?? "notification_log insert failed",
       });
       continue;
     }
@@ -233,7 +244,7 @@ async function insertLogIfNew(
   plan: PlannedSend,
   orderId: string | null,
   supabase: SupabaseClient
-): Promise<{ created: boolean; id: string | null }> {
+): Promise<{ id: string | null; duplicate: boolean; error?: string }> {
   const { data, error } = await supabase
     .from("notification_log")
     .insert({
@@ -248,14 +259,13 @@ async function insertLogIfNew(
     .select("id")
     .single();
 
-  // Postgres unique violation on the idempotency index
-  if (error && error.code === "23505") {
-    return { created: false, id: null };
+  if (error?.code === "23505") {
+    return { id: null, duplicate: true };
   }
   if (error || !data) {
-    return { created: false, id: null };
+    return { id: null, duplicate: false, error: error?.message ?? "no row returned" };
   }
-  return { created: true, id: data.id };
+  return { id: data.id, duplicate: false };
 }
 
 async function fetchAdminTelegramIds(supabase: SupabaseClient): Promise<string[]> {
