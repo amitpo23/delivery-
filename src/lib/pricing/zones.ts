@@ -160,3 +160,25 @@ export function resolveZone(address: string): PricingZone | null {
 export function getZoneById(id: string): PricingZone | null {
   return ZONES.find((z) => z.id === id) ?? null;
 }
+
+/**
+ * Coarse distance estimate (km) between two zones — used as a server-side
+ * floor for pricing so the client cannot shrink the price by lying about
+ * `distanceKm`. Same-zone trips assume 5 km of city driving. Cross-zone
+ * pairs are based on rough road distances; replace with Google Routes when
+ * the API key is wired.
+ *
+ * The matrix is symmetric — order of arguments doesn't matter.
+ */
+const ZONE_DISTANCES_KM: Record<string, Record<string, number>> = {
+  haifa: { haifa: 5, megido: 25, gilboa: 60, beit_shean: 75, afula: 50, taanachim: 45 },
+  megido: { haifa: 25, megido: 8, gilboa: 50, beit_shean: 65, afula: 35, taanachim: 30 },
+  gilboa: { haifa: 60, megido: 50, gilboa: 10, beit_shean: 25, afula: 25, taanachim: 30 },
+  beit_shean: { haifa: 75, megido: 65, gilboa: 25, beit_shean: 8, afula: 35, taanachim: 40 },
+  afula: { haifa: 50, megido: 35, gilboa: 25, beit_shean: 35, afula: 5, taanachim: 12 },
+  taanachim: { haifa: 45, megido: 30, gilboa: 30, beit_shean: 40, afula: 12, taanachim: 8 },
+};
+
+export function estimateZoneDistanceKm(from: PricingZone, to: PricingZone): number {
+  return ZONE_DISTANCES_KM[from.id]?.[to.id] ?? 50;
+}

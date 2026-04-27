@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { calculatePrice } from "@/lib/pricing/engine";
-import { resolveZone } from "@/lib/pricing/zones";
+import { estimateZoneDistanceKm, resolveZone } from "@/lib/pricing/zones";
 import { getPaymentProvider, PaymentError } from "@/lib/payments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateOrderNumber } from "@/lib/utils";
@@ -67,10 +67,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Address outside coverage area" }, { status: 422 });
   }
 
+  // Distance is computed server-side from the resolved zones; the client's
+  // `distanceKm` is treated as advisory only and clamped to >= the zone-pair
+  // floor. This blocks the "force a long delivery to be priced as a short one"
+  // attack flagged in the PR #4 review.
+  const zoneFloorKm = estimateZoneDistanceKm(pickupZone, deliveryZone);
+  const distanceKm = Math.max(zoneFloorKm, Math.min(b.distanceKm, 500));
+
   const fresh = calculatePrice({
     pickupZone,
     deliveryZone,
-    distanceKm: b.distanceKm,
+    distanceKm,
     size: b.size,
     urgency: b.urgency,
     fragile: b.fragile,
@@ -80,7 +87,7 @@ export async function POST(req: Request) {
 
   if (Math.abs(fresh.total - b.quoteTotal) > 1) {
     return NextResponse.json(
-      { error: "Price mismatch — please refresh", expected: fresh.total },
+      { error: "Price mismatch — please refresh", expected: fresh.total, recomputed: fresh.total },
       { status: 409 }
     );
   }
@@ -145,7 +152,7 @@ export async function POST(req: Request) {
     special_instructions: b.pickupNotes ?? null,
     is_fragile: b.fragile ?? false,
     insurance_amount: b.declaredValue ?? null,
-    distance_km: b.distanceKm,
+    distance_km: distanceKm,
     time_window: b.timeWindow,
     estimated_price: fresh.total,
     final_price: fresh.total,
@@ -156,9 +163,29 @@ export async function POST(req: Request) {
     card_last4: b.card.last4 ?? null,
   }).select("id").single();
 
+  // Money-loss guard: if the DB insert fails after the charge succeeded, refund
+  // the customer immediately so we don't bill for an order we never persisted.
+  // Refund failures are logged in the response so the operator can reconcile.
   if (error || !inserted) {
+    let refundStatus: "succeeded" | "failed" | "skipped" = "skipped";
+    let refundDetails: string | undefined;
+    try {
+      const refund = await provider.refundCharge(charge.transactionId, fresh.total);
+      refundStatus = refund.status === "succeeded" ? "succeeded" : "failed";
+      refundDetails = refund.reason;
+    } catch (refundErr) {
+      refundStatus = "failed";
+      refundDetails = refundErr instanceof Error ? refundErr.message : String(refundErr);
+    }
     return NextResponse.json(
-      { error: "Order persistence failed", details: error?.message ?? "no row returned", orderNumber, paymentTransactionId: charge.transactionId },
+      {
+        error: "Order persistence failed",
+        details: error?.message ?? "no row returned",
+        orderNumber,
+        paymentTransactionId: charge.transactionId,
+        refundStatus,
+        refundDetails,
+      },
       { status: 500 }
     );
   }
