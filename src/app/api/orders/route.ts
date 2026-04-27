@@ -160,7 +160,9 @@ export async function POST(req: Request) {
     payment_method: "credit_card",
     payment_provider: charge.provider,
     payment_transaction_id: charge.transactionId,
-    card_last4: b.card.last4 ?? null,
+    // Trust the provider's reported last4 over the client's. In stub mode this
+    // echoes b.card.last4; in live mode it is the value the gateway saw.
+    card_last4: charge.cardLast4 ?? null,
   }).select("id").single();
 
   // Money-loss guard: if the DB insert fails after the charge succeeded, refund
