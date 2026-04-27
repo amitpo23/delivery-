@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { calculatePrice, type PackageSize, type Urgency } from "@/lib/pricing/engine";
-import { resolveZone } from "@/lib/pricing/zones";
+import { estimateZoneDistanceKm, resolveZone } from "@/lib/pricing/zones";
 
 const QuoteRequestSchema = z.object({
   pickupAddress: z.string().min(2),
   deliveryAddress: z.string().min(2),
-  distanceKm: z.number().nonnegative().max(500),
+  // Optional advisory hint from the client. The server clamps it to at least
+  // the zone-pair floor so a malicious caller cannot get a cheaper price by
+  // shrinking the distance. Same logic in /api/orders — see PR #4 review.
+  distanceKm: z.number().nonnegative().max(500).optional(),
   size: z.enum(["S", "M", "L", "XL"]),
   urgency: z.enum(["express", "same_day", "next_day", "economy"]),
   fragile: z.boolean().optional(),
@@ -51,10 +54,13 @@ export async function POST(req: Request) {
     );
   }
 
+  const zoneFloorKm = estimateZoneDistanceKm(pickupZone, deliveryZone);
+  const effectiveDistanceKm = Math.max(zoneFloorKm, Math.min(distanceKm ?? 0, 500));
+
   const quote = calculatePrice({
     pickupZone,
     deliveryZone,
-    distanceKm,
+    distanceKm: effectiveDistanceKm,
     size: size as PackageSize,
     urgency: urgency as Urgency,
     fragile,
@@ -63,5 +69,5 @@ export async function POST(req: Request) {
     surge,
   });
 
-  return NextResponse.json({ quote });
+  return NextResponse.json({ quote, distanceKm: effectiveDistanceKm });
 }
