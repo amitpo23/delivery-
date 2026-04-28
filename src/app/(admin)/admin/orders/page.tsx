@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Search, Filter, UserPlus, Eye, Route as RouteIcon } from "lucide-react";
+import { Search, Filter, UserPlus, Eye, Route as RouteIcon, Upload } from "lucide-react";
+import Link from "next/link";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/types";
 import type { OrderStatus, ServiceType } from "@/types";
 import { DRIVER_STATUS_COLORS } from "@/constants/mock-data";
@@ -195,6 +196,11 @@ export default function AdminOrdersPage() {
             {pendingCount} ממתינות | {activeCount} פעילות | {orders.length} סה&quot;כ
           </p>
         </div>
+        <div className="flex items-center gap-2">
+        <Link href="/admin/orders/import" className="btn-secondary text-sm">
+          <Upload className="w-4 h-4" />
+          ייבוא CSV
+        </Link>
         {selectedIds.size > 0 && (
           <button
             onClick={async () => {
@@ -236,6 +242,7 @@ export default function AdminOrdersPage() {
             צור נסיעה ({selectedIds.size})
           </button>
         )}
+        </div>
       </div>
 
       <div className="card !p-4 mb-6">
