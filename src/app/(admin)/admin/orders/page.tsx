@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Search, Filter, Plus, UserPlus, Eye, ChevronDown } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Search, Filter, UserPlus, Eye } from "lucide-react";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/types";
 import type { OrderStatus } from "@/types";
-import { MOCK_ADMIN_ORDERS, MOCK_DRIVERS, DRIVER_STATUS_COLORS } from "@/constants/mock-data";
+import { DRIVER_STATUS_COLORS } from "@/constants/mock-data";
+import { createClient } from "@/lib/supabase/client";
 
 const statusFilters = [
   { value: "all", label: "הכל" },
@@ -17,30 +18,165 @@ const statusFilters = [
   { value: "cancelled", label: "בוטל" },
 ];
 
+interface AdminOrder {
+  id: string;
+  order_number: string;
+  status: OrderStatus;
+  service_type: string;
+  pickup_address: string;
+  delivery_address: string;
+  estimated_price: number;
+  created_at: string;
+  driver_id: string | null;
+  booker_full_name: string | null;
+  driver_name: string | null;
+}
+
+interface AdminDriver {
+  id: string;
+  status: string;
+  vehicle_type: string | null;
+  full_name: string;
+  phone: string;
+  zone_name: string | null;
+}
+
 export default function AdminOrdersPage() {
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [drivers, setDrivers] = useState<AdminDriver[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assigningOrderId, setAssigningOrderId] = useState<string | null>(null);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignBusy, setAssignBusy] = useState(false);
 
-  const filtered = MOCK_ADMIN_ORDERS.filter((order) => {
+  const fetchOrders = useCallback(async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("orders")
+      .select(
+        `id, order_number, status, service_type, pickup_address, delivery_address,
+         estimated_price, created_at, driver_id, booker_full_name,
+         driver:drivers(profile:profiles!drivers_user_id_fkey(full_name))`,
+      )
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (!error && data) {
+      setOrders(
+        data.map((o) => {
+          const driverObj = Array.isArray(o.driver) ? o.driver[0] : o.driver;
+          const profileObj = driverObj
+            ? Array.isArray(driverObj.profile)
+              ? driverObj.profile[0]
+              : driverObj.profile
+            : null;
+          return {
+            id: o.id,
+            order_number: o.order_number,
+            status: o.status as OrderStatus,
+            service_type: o.service_type,
+            pickup_address: o.pickup_address,
+            delivery_address: o.delivery_address,
+            estimated_price: Number(o.estimated_price),
+            created_at: o.created_at,
+            driver_id: o.driver_id,
+            booker_full_name: o.booker_full_name,
+            driver_name: profileObj?.full_name ?? null,
+          };
+        }),
+      );
+    }
+    setLoadingOrders(false);
+  }, []);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  async function openAssignModal(orderId: string) {
+    setAssigningOrderId(orderId);
+    setShowAssignModal(true);
+    setAssignError(null);
+    try {
+      const res = await fetch("/api/admin/drivers");
+      if (!res.ok) {
+        setAssignError("שגיאה בטעינת רשימת הנהגים");
+        return;
+      }
+      const json = await res.json();
+      type ApiDriver = {
+        id: string;
+        status: string;
+        vehicle_type: string | null;
+        profile: { full_name: string; phone: string } | { full_name: string; phone: string }[] | null;
+        zone: { name: string } | { name: string }[] | null;
+      };
+      setDrivers(
+        (json.drivers as ApiDriver[]).map((d) => {
+          const p = Array.isArray(d.profile) ? d.profile[0] : d.profile;
+          const z = Array.isArray(d.zone) ? d.zone[0] : d.zone;
+          return {
+            id: d.id,
+            status: d.status,
+            vehicle_type: d.vehicle_type,
+            full_name: p?.full_name ?? "—",
+            phone: p?.phone ?? "",
+            zone_name: z?.name ?? null,
+          };
+        }),
+      );
+    } catch {
+      setAssignError("שגיאה בטעינת רשימת הנהגים");
+    }
+  }
+
+  async function handleAssignDriver(driverId: string) {
+    if (!assigningOrderId) return;
+    setAssignBusy(true);
+    setAssignError(null);
+    try {
+      const res = await fetch(`/api/admin/orders/${assigningOrderId}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ driverId }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setAssignError(
+          res.status === 409
+            ? "ההזמנה כבר שובצה לנהג אחר. רענן ונסה שוב."
+            : json.error || "השיבוץ נכשל",
+        );
+        if (res.status === 409) await fetchOrders();
+        return;
+      }
+      setShowAssignModal(false);
+      setAssigningOrderId(null);
+      await fetchOrders();
+    } catch {
+      setAssignError("שגיאת רשת. נסה שוב.");
+    } finally {
+      setAssignBusy(false);
+    }
+  }
+
+  const filtered = orders.filter((order) => {
     const matchesSearch =
       !search ||
       order.order_number.toLowerCase().includes(search.toLowerCase()) ||
-      order.customer_name.includes(search);
+      (order.booker_full_name?.includes(search) ?? false);
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const pendingCount = MOCK_ADMIN_ORDERS.filter((o) => o.status === "pending").length;
-  const activeCount = MOCK_ADMIN_ORDERS.filter((o) => ["assigned", "picked_up", "in_transit"].includes(o.status)).length;
-
-  function handleAssignDriver(driverId: string) {
-    // TODO: Update in Supabase
-    setShowAssignModal(false);
-    setAssigningOrderId(null);
-  }
+  const pendingCount = orders.filter((o) => o.status === "pending").length;
+  const activeCount = orders.filter((o) =>
+    ["assigned", "picked_up", "in_transit"].includes(o.status),
+  ).length;
 
   return (
     <div>
@@ -48,16 +184,11 @@ export default function AdminOrdersPage() {
         <div>
           <h1 className="text-2xl font-bold text-primary">ניהול הזמנות</h1>
           <p className="text-muted text-sm">
-            {pendingCount} ממתינות | {activeCount} פעילות | {MOCK_ADMIN_ORDERS.length} סה&quot;כ
+            {pendingCount} ממתינות | {activeCount} פעילות | {orders.length} סה&quot;כ
           </p>
         </div>
-        <button className="btn-primary text-sm">
-          <Plus className="w-4 h-4" />
-          הזמנה חדשה
-        </button>
       </div>
 
-      {/* Filters */}
       <div className="card !p-4 mb-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
@@ -89,7 +220,6 @@ export default function AdminOrdersPage() {
         </div>
       </div>
 
-      {/* Orders Table */}
       <div className="card !p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -114,14 +244,20 @@ export default function AdminOrdersPage() {
                   className={`border-b border-border/50 hover:bg-gray-50 cursor-pointer ${
                     selectedOrder === order.id ? "bg-blue-50" : ""
                   }`}
-                  onClick={() => setSelectedOrder(selectedOrder === order.id ? null : order.id)}
+                  onClick={() =>
+                    setSelectedOrder(selectedOrder === order.id ? null : order.id)
+                  }
                 >
                   <td className="p-4 font-mono text-xs font-bold" dir="ltr">
                     {order.order_number}
                   </td>
-                  <td className="p-4 font-medium">{order.customer_name}</td>
-                  <td className="p-4 text-xs text-muted max-w-[150px] truncate">{order.pickup_address}</td>
-                  <td className="p-4 text-xs text-muted max-w-[150px] truncate">{order.delivery_address}</td>
+                  <td className="p-4 font-medium">{order.booker_full_name ?? "—"}</td>
+                  <td className="p-4 text-xs text-muted max-w-[150px] truncate">
+                    {order.pickup_address}
+                  </td>
+                  <td className="p-4 text-xs text-muted max-w-[150px] truncate">
+                    {order.delivery_address}
+                  </td>
                   <td className="p-4">
                     {order.driver_name ? (
                       <span className="text-sm">{order.driver_name}</span>
@@ -129,8 +265,7 @@ export default function AdminOrdersPage() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setAssigningOrderId(order.id);
-                          setShowAssignModal(true);
+                          openAssignModal(order.id);
                         }}
                         className="flex items-center gap-1 text-xs text-secondary hover:text-secondary-dark font-medium"
                       >
@@ -150,7 +285,9 @@ export default function AdminOrdersPage() {
                       {ORDER_STATUS_LABELS[order.status]}
                     </span>
                   </td>
-                  <td className="p-4 text-xs text-muted capitalize">{order.service_type.replace("_", " ")}</td>
+                  <td className="p-4 text-xs text-muted capitalize">
+                    {order.service_type.replace("_", " ")}
+                  </td>
                   <td className="p-4 font-bold">{order.estimated_price}₪</td>
                   <td className="p-4 text-xs text-muted" dir="ltr">
                     {new Date(order.created_at).toLocaleDateString("he-IL")}
@@ -166,25 +303,36 @@ export default function AdminOrdersPage() {
           </table>
         </div>
 
-        {filtered.length === 0 && (
+        {!loadingOrders && filtered.length === 0 && (
           <div className="text-center py-12 text-muted">לא נמצאו הזמנות</div>
+        )}
+        {loadingOrders && (
+          <div className="text-center py-12 text-muted">טוען...</div>
         )}
       </div>
 
-      {/* Assign Driver Modal */}
       {showAssignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowAssignModal(false)} />
           <div className="relative bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
             <h2 className="text-lg font-bold text-primary mb-4">שיבוץ נהג</h2>
-            <p className="text-sm text-muted mb-4">בחרו נהג להזמנה #{MOCK_ADMIN_ORDERS.find(o => o.id === assigningOrderId)?.order_number}</p>
+            <p className="text-sm text-muted mb-4">
+              בחרו נהג להזמנה #{orders.find((o) => o.id === assigningOrderId)?.order_number}
+            </p>
+
+            {assignError && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm mb-3">
+                {assignError}
+              </div>
+            )}
 
             <div className="space-y-2 max-h-80 overflow-y-auto">
-              {MOCK_DRIVERS.filter((d) => d.status !== "offline").map((driver) => (
+              {drivers.map((driver) => (
                 <button
                   key={driver.id}
                   onClick={() => handleAssignDriver(driver.id)}
-                  className="w-full flex items-center justify-between p-3 rounded-xl border border-border hover:border-secondary hover:bg-secondary/5 transition-colors text-right"
+                  disabled={assignBusy}
+                  className="w-full flex items-center justify-between p-3 rounded-xl border border-border hover:border-secondary hover:bg-secondary/5 transition-colors text-right disabled:opacity-50"
                 >
                   <div className="flex items-center gap-3">
                     <div
@@ -192,20 +340,23 @@ export default function AdminOrdersPage() {
                       style={{ backgroundColor: DRIVER_STATUS_COLORS[driver.status] }}
                     />
                     <div>
-                      <div className="font-medium text-sm">{driver.name}</div>
-                      <div className="text-xs text-muted">{driver.vehicle} | {driver.zone}</div>
+                      <div className="font-medium text-sm">{driver.full_name}</div>
+                      <div className="text-xs text-muted">
+                        {driver.vehicle_type ?? "—"} | {driver.zone_name ?? "—"}
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-xs text-muted">
-                    {driver.todayDeliveries} משלוחים היום
                   </div>
                 </button>
               ))}
+              {drivers.length === 0 && !assignError && (
+                <div className="text-center text-muted text-sm py-6">טוען נהגים זמינים...</div>
+              )}
             </div>
 
             <button
               onClick={() => setShowAssignModal(false)}
-              className="btn-secondary w-full mt-4"
+              disabled={assignBusy}
+              className="btn-secondary w-full mt-4 disabled:opacity-50"
             >
               ביטול
             </button>
