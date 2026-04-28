@@ -4,6 +4,7 @@ import { Package, MapPin, Clock, AlertCircle } from "lucide-react";
 import { Timeline } from "@/components/tracking/Timeline";
 import TrackingMap from "@/components/tracking/TrackingMapWrapper";
 import ComplaintButton from "@/components/tracking/ComplaintButton";
+import FeedbackForm from "@/components/tracking/FeedbackForm";
 import { ORDER_STATUS_LABELS, type OrderStatus } from "@/types";
 import { COMPANY_SHORT } from "@/constants/services";
 import { formatDate, formatPrice } from "@/lib/utils";
@@ -24,6 +25,7 @@ interface OrderRecord {
   pickup_lng: number | null;
   delivery_lat: number | null;
   delivery_lng: number | null;
+  rating: number | null;
 }
 
 interface HistoryRecord {
@@ -181,6 +183,15 @@ export default async function TrackPage({
               </div>
               <ComplaintButton orderNumber={result.order.order_number} />
             </div>
+
+            {result.order.status === "delivered" && (
+              <div className="card !p-4">
+                <FeedbackForm
+                  orderNumber={result.order.order_number}
+                  alreadyRated={result.order.rating}
+                />
+              </div>
+            )}
           </div>
         )}
       </main>
