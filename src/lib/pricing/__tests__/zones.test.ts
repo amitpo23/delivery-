@@ -32,6 +32,12 @@ describe("resolveZone", () => {
     expect(resolveZone("ירושלים, יפו 1")).toBeNull();
   });
 
+  it("matches רמת ישי and קריית טבעון as taanachim coverage", () => {
+    expect(resolveZone("רמת ישי, רח' הרצל 5")?.id).toBe("taanachim");
+    expect(resolveZone("קריית טבעון, רח' החרוב 1")?.id).toBe("taanachim");
+    expect(resolveZone("קרית טבעון, אלוני אבא")?.id).toBe("taanachim");
+  });
+
   it("returns null for empty input", () => {
     expect(resolveZone("")).toBeNull();
   });

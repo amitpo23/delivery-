@@ -114,6 +114,9 @@ export const ZONES: readonly PricingZone[] = [
       "כפר ברוך",
       "מזרע",
       "גזית",
+      "רמת ישי",
+      "קריית טבעון",
+      "קרית טבעון",
     ],
   },
 ];
@@ -187,16 +190,54 @@ export const SUB_ZONES: Record<string, readonly SubZone[]> = {
   afula: [
     { name: "עפולה עילית", patterns: ["עפולה עילית"], multiplier: 1.05 },
   ],
+  // Beit She'an valley: city neighborhoods + border-adjacent kibbutzim
   beit_shean: [
+    // Border-adjacent (Jordan) — hardest access
     { name: "מעלה גלבוע", patterns: ["מעלה גלבוע"], multiplier: 1.1 },
     { name: "רויה", patterns: ["רויה"], multiplier: 1.1 },
+    { name: "טירת צבי", patterns: ["טירת צבי"], multiplier: 1.1 },
+    { name: "שדה אליהו", patterns: ["שדה אליהו"], multiplier: 1.1 },
+    // Inner valley kibbutzim — moderate distance from city
     { name: "מסילות", patterns: ["מסילות"], multiplier: 1.05 },
+    { name: "כפר רופין", patterns: ["כפר רופין"], multiplier: 1.05 },
+    { name: "ניר דוד", patterns: ["ניר דוד"], multiplier: 1.05 },
+    { name: "שלוחות", patterns: ["שלוחות"], multiplier: 1.05 },
+    { name: "מעוז חיים", patterns: ["מעוז חיים"], multiplier: 1.05 },
+    // City neighborhoods
+    { name: "רובע ה'", patterns: ["רובע ה", "שיכון ה"], multiplier: 1.05 },
+    { name: "אזור התעשייה", patterns: ["אזור התעשייה"], multiplier: 1.05 },
   ],
+  // Gilboa: hilltop + border kibbutzim get +10%, mid-mountain +5%
   gilboa: [
-    { name: "מגן שאול", patterns: ["מגן שאול"], multiplier: 1.05 },
+    { name: "מגן שאול", patterns: ["מגן שאול"], multiplier: 1.1 },
+    { name: "נורית", patterns: ["נורית"], multiplier: 1.1 },
+    { name: "מולדת", patterns: ["מולדת"], multiplier: 1.1 },
+    { name: "רמת צבי", patterns: ["רמת צבי"], multiplier: 1.1 },
+    { name: "חבר", patterns: ["חבר"], multiplier: 1.05 },
+    { name: "מיטב", patterns: ["מיטב"], multiplier: 1.05 },
+    { name: "פרזון", patterns: ["פרזון"], multiplier: 1.05 },
+    { name: "דבורה", patterns: ["דבורה"], multiplier: 1.05 },
   ],
-  megido: [],
-  taanachim: [],
+  // Megido: kibbutzim on Mt. Carmel ridge are higher altitude, harder access
+  megido: [
+    { name: "עין השופט", patterns: ["עין השופט"], multiplier: 1.1 },
+    { name: "רמות מנשה", patterns: ["רמות מנשה"], multiplier: 1.1 },
+    { name: "דליה", patterns: ["דליה"], multiplier: 1.1 },
+    { name: "גלעד", patterns: ["גלעד"], multiplier: 1.05 },
+    { name: "אליקים", patterns: ["אליקים"], multiplier: 1.05 },
+    { name: "הזורע", patterns: ["הזורע"], multiplier: 1.05 },
+    { name: "משמר העמק", patterns: ["משמר העמק"], multiplier: 1.05 },
+    { name: "מדרך עוז", patterns: ["מדרך עוז"], multiplier: 1.05 },
+  ],
+  // Ta'anachim / Yizra'el valley: edge kibbutzim
+  taanachim: [
+    { name: "גזית", patterns: ["גזית"], multiplier: 1.1 },
+    { name: "עין דור", patterns: ["עין דור"], multiplier: 1.05 },
+    { name: "גבעת עוז", patterns: ["גבעת עוז"], multiplier: 1.05 },
+    { name: "עדי", patterns: ["עדי"], multiplier: 1.05 },
+    { name: "מרחביה", patterns: ["מרחביה"], multiplier: 1.05 },
+    { name: "דברת", patterns: ["דברת"], multiplier: 1.05 },
+  ],
 };
 
 const SUB_ZONE_DEFAULT: SubZone = { name: "", patterns: [], multiplier: 1.0 };
