@@ -6,26 +6,65 @@ import { SERVICE_TYPES, WEIGHT_RANGES } from "@/constants/services";
 import { formatPrice } from "@/lib/utils";
 import Link from "next/link";
 
+const WEIGHT_TO_SIZE: Record<string, "S" | "M" | "L" | "XL"> = {
+  light: "S",
+  medium: "M",
+  heavy: "L",
+  very_heavy: "XL",
+};
+
+const SUPPORTED_URGENCIES = new Set(["express", "same_day", "next_day", "economy"]);
+
 export default function PriceCalculatorMini() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [serviceType, setServiceType] = useState("next_day");
   const [weight, setWeight] = useState("light");
   const [result, setResult] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function calculatePrice() {
-    const service = SERVICE_TYPES.find((s) => s.id === serviceType);
-    const weightRange = WEIGHT_RANGES.find((w) => w.id === weight);
-    if (!service || !weightRange || !from || !to) return;
+  async function calculatePrice() {
+    setError(null);
+    setResult(null);
 
-    const base = service.basePrice;
-    const weightSurcharge = weightRange.surcharge;
-    const estimatedDistance = 15 + Math.random() * 40; // placeholder
-    const distanceSurcharge = Math.round(estimatedDistance * 1.2);
-    const subtotal = base + weightSurcharge + distanceSurcharge;
-    const total = Math.round(subtotal * 1.17); // VAT
+    if (!from.trim() || !to.trim()) {
+      setError("נא למלא את כתובת המוצא והיעד");
+      return;
+    }
+    const size = WEIGHT_TO_SIZE[weight];
+    if (!size || !SUPPORTED_URGENCIES.has(serviceType)) {
+      setError("בחירת שירות / משקל לא תקינה");
+      return;
+    }
 
-    setResult(total);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/pricing/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pickupAddress: from.trim(),
+          deliveryAddress: to.trim(),
+          size,
+          urgency: serviceType,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        if (res.status === 422 && json.coverage) {
+          setError(`כתובת מחוץ לאזור הכיסוי. אזורים: ${json.coverage.join(", ")}`);
+        } else {
+          setError(json.error || "שגיאה בחישוב המחיר");
+        }
+        return;
+      }
+      setResult(json.quote.total);
+    } catch {
+      setError("שגיאת רשת. נסו שוב.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -36,7 +75,6 @@ export default function PriceCalculatorMini() {
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-        {/* From */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">מאיפה?</label>
           <div className="relative">
@@ -51,7 +89,6 @@ export default function PriceCalculatorMini() {
           </div>
         </div>
 
-        {/* To */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">לאיפה?</label>
           <div className="relative">
@@ -66,7 +103,6 @@ export default function PriceCalculatorMini() {
           </div>
         </div>
 
-        {/* Service Type */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">סוג שירות</label>
           <select
@@ -82,7 +118,6 @@ export default function PriceCalculatorMini() {
           </select>
         </div>
 
-        {/* Weight */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">משקל</label>
           <select
@@ -98,22 +133,33 @@ export default function PriceCalculatorMini() {
           </select>
         </div>
 
-        {/* Calculate */}
         <div>
-          <button onClick={calculatePrice} className="btn-primary w-full">
-            חשב מחיר
+          <button
+            onClick={calculatePrice}
+            disabled={loading}
+            className="btn-primary w-full disabled:opacity-50"
+          >
+            {loading ? "מחשב..." : "חשב מחיר"}
           </button>
         </div>
       </div>
 
-      {/* Result */}
-      {result && (
+      {error && (
+        <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
+
+      {result !== null && (
         <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between">
           <div>
             <div className="text-sm text-green-700">מחיר משוער (כולל מע&quot;מ)</div>
             <div className="text-3xl font-bold text-green-800">{formatPrice(result)}</div>
           </div>
-          <Link href="/booking" className="btn-primary !bg-green-600 hover:!bg-green-700">
+          <Link
+            href={`/booking?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&service=${serviceType}&weight=${weight}`}
+            className="btn-primary !bg-green-600 hover:!bg-green-700"
+          >
             להזמנה
             <ArrowLeft className="w-4 h-4" />
           </Link>
