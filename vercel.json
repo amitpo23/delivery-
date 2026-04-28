@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/check-late-orders",
       "schedule": "10 * * * *"
+    },
+    {
+      "path": "/api/cron/run-recurring",
+      "schedule": "5 * * * *"
     }
   ]
 }

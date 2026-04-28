@@ -19,12 +19,14 @@ import {
   AlertCircle,
   History,
   Tag,
+  Repeat,
 } from "lucide-react";
 import { COMPANY_SHORT } from "@/constants/services";
 
 const sidebarLinks = [
   { href: "/admin", label: "דשבורד", icon: LayoutDashboard },
   { href: "/admin/orders", label: "הזמנות", icon: ClipboardList },
+  { href: "/admin/recurring", label: "חוזרות", icon: Repeat },
   { href: "/admin/tickets", label: "פניות", icon: AlertCircle },
   { href: "/admin/live", label: "מפה חיה", icon: Map },
   { href: "/admin/drivers", label: "נהגים", icon: Truck },
