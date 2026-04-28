@@ -10,6 +10,8 @@ import { geocodeAddress } from "@/lib/geocoding/google";
 import { haversineKm } from "@/lib/geo/distance";
 import { rateLimit, getRequestIp } from "@/lib/rate-limit";
 import { validateCoupon, redeemCoupon } from "@/lib/coupons/redeem";
+import { getEmailSender } from "@/lib/email/resend";
+import { orderConfirmationEmail } from "@/lib/email/templates";
 
 const Body = z.object({
   pickupAddress: z.string().min(2),
@@ -286,6 +288,26 @@ export async function POST(req: Request) {
       phone: b.pickupContactPhone,
       amount: couponDiscount,
     });
+  }
+
+  // Best-effort confirmation email. Failure here doesn't roll back the
+  // order — the customer still has /track/[orderNumber] regardless.
+  if (b.bookerEmail) {
+    try {
+      const sender = getEmailSender();
+      await sender.send(
+        orderConfirmationEmail({
+          to: b.bookerEmail,
+          orderNumber,
+          total: chargeTotal,
+          pickupAddress: b.pickupAddress,
+          deliveryAddress: b.deliveryAddress,
+          bookerName: b.card.holderName,
+        }),
+      );
+    } catch (err) {
+      console.error("[email] order confirmation failed", err);
+    }
   }
 
   return NextResponse.json({
