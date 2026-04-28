@@ -265,10 +265,25 @@ export default function BookingPage() {
     );
   }
 
+  // Show the demo banner unless we've explicitly flipped to live mode in env.
+  // Default to "demo" so a fresh deploy without Sumit/Grow keys can't claim
+  // it charged a real card.
+  const isLivePayment = process.env.NEXT_PUBLIC_PAYMENT_LIVE === "true";
+
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-2xl md:text-3xl font-bold text-primary mb-2">הזמנת משלוח</h1>
       <p className="text-muted mb-6">3 שלבים, בלי הרשמה</p>
+
+      {!isLivePayment && (
+        <div className="card !p-3 mb-4 bg-amber-50 border-amber-300 flex items-start gap-2">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-sm text-amber-900">
+            <strong>מצב הדגמה.</strong> תשלום לא נגבה בפועל וההודעות לא נשלחות בפועל.
+            ההזמנה תיווצר במערכת לצורך בדיקה.
+          </div>
+        </div>
+      )}
 
       <StepsIndicator current={step} />
 
