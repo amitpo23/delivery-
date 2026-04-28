@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { Package, MapPin, Clock, AlertCircle } from "lucide-react";
 import { Timeline } from "@/components/tracking/Timeline";
 import TrackingMap from "@/components/tracking/TrackingMapWrapper";
+import ComplaintButton from "@/components/tracking/ComplaintButton";
 import { ORDER_STATUS_LABELS, type OrderStatus } from "@/types";
 import { COMPANY_SHORT } from "@/constants/services";
 import { formatDate, formatPrice } from "@/lib/utils";
@@ -172,6 +173,13 @@ export default async function TrackPage({
             <div className="card !p-5">
               <h2 className="font-bold text-primary mb-4">סטטוס</h2>
               <Timeline current={result.order.status} events={result.history} />
+            </div>
+
+            <div className="card !p-4 flex items-center justify-between">
+              <div className="text-sm text-muted">
+                משהו לא כשורה? ניתן לדווח כאן ונחזור אליך בהקדם.
+              </div>
+              <ComplaintButton orderNumber={result.order.order_number} />
             </div>
           </div>
         )}
