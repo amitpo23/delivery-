@@ -1,213 +1,206 @@
 "use client";
 
-import { useState } from "react";
-import { Settings, MapPin, DollarSign, Bell, Save } from "lucide-react";
-import { COVERAGE_AREAS, SERVICE_TYPES } from "@/constants/services";
+import { useEffect, useState, useCallback } from "react";
+import { Settings, Save, Info } from "lucide-react";
 
-export default function AdminSettingsPage() {
-  const [activeTab, setActiveTab] = useState("zones");
-  const [saved, setSaved] = useState(false);
+interface Zone {
+  id: string;
+  name: string;
+  description: string | null;
+  base_price: number;
+  price_per_km: number;
+  multiplier: number;
+}
 
-  const tabs = [
-    { id: "zones", label: "אזורי שירות", icon: MapPin },
-    { id: "pricing", label: "מחירון", icon: DollarSign },
-    { id: "notifications", label: "התראות", icon: Bell },
-    { id: "general", label: "כללי", icon: Settings },
-  ];
+interface PricingRule {
+  id: string;
+  service_type: string;
+  urgency_multiplier: number;
+}
 
-  function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+const SERVICE_LABELS: Record<string, string> = {
+  express: "אקספרס",
+  same_day: "באותו יום",
+  next_day: "יום למחרת",
+  economy: "חסכון",
+};
+
+export default function SettingsPage() {
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [rules, setRules] = useState<PricingRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/settings");
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setError(j.error || "טעינה נכשלה");
+        return;
+      }
+      const json = await res.json();
+      setZones(
+        (json.zones ?? []).map((z: Zone) => ({
+          ...z,
+          base_price: Number(z.base_price),
+          price_per_km: Number(z.price_per_km),
+          multiplier: Number(z.multiplier),
+        })),
+      );
+      setRules(
+        (json.pricing_rules ?? []).map((r: PricingRule) => ({
+          ...r,
+          urgency_multiplier: Number(r.urgency_multiplier),
+        })),
+      );
+      setError(null);
+    } catch {
+      setError("שגיאת רשת");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  function updateZone(id: string, patch: Partial<Zone>) {
+    setZones((prev) => prev.map((z) => (z.id === id ? { ...z, ...patch } : z)));
   }
+  function updateRule(id: string, patch: Partial<PricingRule>) {
+    setRules((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          zones: zones.map((z) => ({
+            id: z.id,
+            base_price: z.base_price,
+            price_per_km: z.price_per_km,
+            multiplier: z.multiplier,
+          })),
+          pricing_rules: rules.map((r) => ({
+            id: r.id,
+            urgency_multiplier: r.urgency_multiplier,
+          })),
+        }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setError(j.error || "שמירה נכשלה");
+        return;
+      }
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <div className="text-center py-20 text-muted">טוען...</div>;
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-primary">הגדרות</h1>
-        <p className="text-muted text-sm">ניהול הגדרות המערכת</p>
+      <div className="flex items-center gap-3 mb-6">
+        <Settings className="w-6 h-6 text-secondary" />
+        <h1 className="text-2xl font-bold text-primary">הגדרות תמחור</h1>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 overflow-x-auto">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm rounded-lg whitespace-nowrap transition-colors ${
-                activeTab === tab.id
-                  ? "bg-primary text-white"
-                  : "bg-white border border-border text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          );
-        })}
+      {error && (
+        <div className="card !p-3 mb-4 bg-red-50 border-red-200 text-red-700 text-sm">{error}</div>
+      )}
+
+      <div className="card !p-3 mb-4 bg-amber-50 border-amber-200 flex gap-2">
+        <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+        <div className="text-xs text-amber-900">
+          הגדרות אלו נשמרות לטבלת ה-DB. מנוע התמחור בייצור עדיין קורא מקבועים ב-
+          <code className="font-mono">src/lib/pricing/zones.ts</code>. השינויים ישמשו לדוחות וגרסה עתידית
+          של המנוע. עריכה כאן נכתבת ל-audit log.
+        </div>
       </div>
 
-      {/* Zones Tab */}
-      {activeTab === "zones" && (
-        <div className="card !p-6">
-          <h2 className="text-lg font-bold text-primary mb-4">אזורי שירות</h2>
-          <div className="space-y-4">
-            {COVERAGE_AREAS.map((area, index) => (
-              <div key={area.name} className="p-4 bg-gray-50 rounded-xl">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-secondary" />
-                    <span className="font-bold text-primary">{area.name}</span>
-                  </div>
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" defaultChecked className="rounded" />
-                    <span className="text-sm text-muted">פעיל</span>
-                  </label>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-xs text-muted">מחיר בסיס</label>
+      <div className="card !p-4 mb-4">
+        <h2 className="text-sm font-bold text-primary mb-3">אזורים</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-muted text-xs">
+                <th className="text-right p-2">שם</th>
+                <th className="text-right p-2">מחיר בסיס</th>
+                <th className="text-right p-2">₪/ק&quot;מ</th>
+                <th className="text-right p-2">multiplier</th>
+              </tr>
+            </thead>
+            <tbody>
+              {zones.map((z) => (
+                <tr key={z.id} className="border-t border-border">
+                  <td className="p-2 font-medium">{z.name}</td>
+                  <td className="p-2">
                     <input
                       type="number"
-                      defaultValue={20 + index * 5}
-                      className="input-field text-sm !py-1.5"
+                      step="0.5"
+                      value={z.base_price}
+                      onChange={(e) => updateZone(z.id, { base_price: Number(e.target.value) })}
+                      className="input-field !py-1 w-24 text-sm"
                     />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted">מחיר לק&quot;מ</label>
+                  </td>
+                  <td className="p-2">
                     <input
                       type="number"
                       step="0.1"
-                      defaultValue={1.0 + index * 0.2}
-                      className="input-field text-sm !py-1.5"
+                      value={z.price_per_km}
+                      onChange={(e) => updateZone(z.id, { price_per_km: Number(e.target.value) })}
+                      className="input-field !py-1 w-24 text-sm"
                     />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted">זמן מקסימלי (שעות)</label>
+                  </td>
+                  <td className="p-2">
                     <input
                       type="number"
-                      defaultValue={4 + index * 2}
-                      className="input-field text-sm !py-1.5"
+                      step="0.05"
+                      value={z.multiplier}
+                      onChange={(e) => updateZone(z.id, { multiplier: Number(e.target.value) })}
+                      className="input-field !py-1 w-24 text-sm"
                     />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button onClick={handleSave} className="btn-primary mt-6">
-            <Save className="w-4 h-4" />
-            {saved ? "נשמר!" : "שמור שינויים"}
-          </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
 
-      {/* Pricing Tab */}
-      {activeTab === "pricing" && (
-        <div className="card !p-6">
-          <h2 className="text-lg font-bold text-primary mb-4">הגדרות מחירון</h2>
-          <div className="space-y-4">
-            {SERVICE_TYPES.map((service) => (
-              <div key={service.id} className="p-4 bg-gray-50 rounded-xl">
-                <div className="flex items-center gap-2 mb-3">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: service.color }}
-                  />
-                  <span className="font-bold text-primary">{service.name}</span>
-                  <span className="text-xs text-muted">({service.timeframe})</span>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div>
-                    <label className="text-xs text-muted">מחיר בסיס (₪)</label>
-                    <input type="number" defaultValue={service.basePrice} className="input-field text-sm !py-1.5" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted">מחיר לק&quot;מ (₪)</label>
-                    <input type="number" step="0.1" defaultValue={1.5} className="input-field text-sm !py-1.5" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted">מחיר לק&quot;ג (₪)</label>
-                    <input type="number" step="0.1" defaultValue={1.0} className="input-field text-sm !py-1.5" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted">מכפיל שעות שיא</label>
-                    <input type="number" step="0.1" defaultValue={1.0} className="input-field text-sm !py-1.5" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button onClick={handleSave} className="btn-primary mt-6">
-            <Save className="w-4 h-4" />
-            {saved ? "נשמר!" : "שמור שינויים"}
-          </button>
+      <div className="card !p-4 mb-4">
+        <h2 className="text-sm font-bold text-primary mb-3">מכפילי דחיפות</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {rules.map((r) => (
+            <div key={r.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+              <span className="font-medium">{SERVICE_LABELS[r.service_type] ?? r.service_type}</span>
+              <input
+                type="number"
+                step="0.05"
+                value={r.urgency_multiplier}
+                onChange={(e) => updateRule(r.id, { urgency_multiplier: Number(e.target.value) })}
+                className="input-field !py-1 w-24 text-sm"
+              />
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
-      {/* Notifications Tab */}
-      {activeTab === "notifications" && (
-        <div className="card !p-6">
-          <h2 className="text-lg font-bold text-primary mb-4">הגדרות התראות</h2>
-          <div className="space-y-4">
-            {[
-              { label: "SMS ללקוח בעת יצירת הזמנה", defaultChecked: true },
-              { label: "SMS ללקוח בעת שיבוץ נהג", defaultChecked: true },
-              { label: "SMS ללקוח בעת איסוף", defaultChecked: true },
-              { label: "SMS ללקוח בעת מסירה", defaultChecked: true },
-              { label: "SMS למקבל בעת שיבוץ נהג", defaultChecked: false },
-              { label: "WhatsApp ללקוח", defaultChecked: false },
-              { label: "אימייל סיכום יומי למנהל", defaultChecked: true },
-              { label: "התראה על הזמנה שלא שובצה 30 דקות", defaultChecked: true },
-            ].map((setting) => (
-              <label key={setting.label} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100">
-                <span className="text-sm">{setting.label}</span>
-                <input type="checkbox" defaultChecked={setting.defaultChecked} className="rounded" />
-              </label>
-            ))}
-          </div>
-          <button onClick={handleSave} className="btn-primary mt-6">
-            <Save className="w-4 h-4" />
-            {saved ? "נשמר!" : "שמור שינויים"}
-          </button>
-        </div>
-      )}
-
-      {/* General Tab */}
-      {activeTab === "general" && (
-        <div className="card !p-6">
-          <h2 className="text-lg font-bold text-primary mb-4">הגדרות כלליות</h2>
-          <div className="space-y-4 max-w-lg">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">שם החברה</label>
-              <input type="text" defaultValue="אליהב כהן פודגרופ ומשלוחים" className="input-field" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">טלפון</label>
-              <input type="tel" defaultValue="04-XXX-XXXX" className="input-field" dir="ltr" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">אימייל</label>
-              <input type="email" defaultValue="info@elihav-delivery.co.il" className="input-field" dir="ltr" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">שעות פעילות</label>
-              <div className="grid grid-cols-2 gap-3">
-                <input type="time" defaultValue="08:00" className="input-field" />
-                <input type="time" defaultValue="20:00" className="input-field" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">מע&quot;מ (%)</label>
-              <input type="number" defaultValue={17} className="input-field" />
-            </div>
-          </div>
-          <button onClick={handleSave} className="btn-primary mt-6">
-            <Save className="w-4 h-4" />
-            {saved ? "נשמר!" : "שמור שינויים"}
-          </button>
-        </div>
-      )}
+      <button onClick={save} disabled={saving} className="btn-primary disabled:opacity-50">
+        <Save className="w-4 h-4" />
+        {saving ? "שומר..." : savedFlash ? "נשמר!" : "שמור שינויים"}
+      </button>
     </div>
   );
 }
