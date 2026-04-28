@@ -1,79 +1,77 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search, Filter, Package, ArrowLeft } from "lucide-react";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/types";
 import type { OrderStatus } from "@/types";
+import { createClient } from "@/lib/supabase/client";
 
-const mockOrders = [
-  {
-    id: "1",
-    order_number: "DEL-ABC123-XYZ",
-    status: "in_transit" as OrderStatus,
-    service_type: "express",
-    pickup_address: "חיפה, רח' הרצל 15",
-    delivery_address: "כרמיאל, רח' הגליל 22",
-    estimated_price: 89,
-    created_at: "2026-02-26T10:00:00Z",
-  },
-  {
-    id: "2",
-    order_number: "DEL-DEF456-ABC",
-    status: "delivered" as OrderStatus,
-    service_type: "next_day",
-    pickup_address: "חיפה, רח' מוריה 8",
-    delivery_address: "נהריה, רח' הגעתון 5",
-    estimated_price: 45,
-    created_at: "2026-02-25T14:30:00Z",
-  },
-  {
-    id: "3",
-    order_number: "DEL-GHI789-DEF",
-    status: "pending" as OrderStatus,
-    service_type: "same_day",
-    pickup_address: "קריית ביאליק, רח' דרך עכו 45",
-    delivery_address: "עכו, העיר העתיקה",
-    estimated_price: 55,
-    created_at: "2026-02-26T09:00:00Z",
-  },
-  {
-    id: "4",
-    order_number: "DEL-JKL012-GHI",
-    status: "delivered" as OrderStatus,
-    service_type: "economy",
-    pickup_address: "חיפה, רח' החלוץ 3",
-    delivery_address: "צפת, רח' ירושלים 12",
-    estimated_price: 35,
-    created_at: "2026-02-23T08:00:00Z",
-  },
-  {
-    id: "5",
-    order_number: "DEL-MNO345-JKL",
-    status: "cancelled" as OrderStatus,
-    service_type: "express",
-    pickup_address: "נשר, רח' הראשונים 7",
-    delivery_address: "טבריה, רח' הגליל 18",
-    estimated_price: 92,
-    created_at: "2026-02-22T16:00:00Z",
-  },
-];
+interface PortalOrder {
+  id: string;
+  order_number: string;
+  status: OrderStatus;
+  service_type: string;
+  pickup_address: string;
+  delivery_address: string;
+  estimated_price: number;
+  created_at: string;
+}
 
 const statusFilters: { value: string; label: string }[] = [
   { value: "all", label: "הכל" },
-  { value: "pending", label: "ממתין" },
-  { value: "in_transit", label: "בדרך" },
-  { value: "delivered", label: "נמסר" },
-  { value: "cancelled", label: "בוטל" },
+  { value: "active", label: "פעילות" },
+  { value: "delivered", label: "נמסרו" },
+  { value: "cancelled", label: "בוטלו" },
 ];
 
 export default function OrdersPage() {
+  const [orders, setOrders] = useState<PortalOrder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const filtered = mockOrders.filter((order) => {
-    const matchesSearch = !search || order.order_number.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+  useEffect(() => {
+    (async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("orders")
+        .select(
+          "id, order_number, status, service_type, pickup_address, delivery_address, estimated_price, created_at",
+        )
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        setOrders(
+          data.map((o) => ({
+            id: o.id,
+            order_number: o.order_number,
+            status: o.status as OrderStatus,
+            service_type: o.service_type,
+            pickup_address: o.pickup_address,
+            delivery_address: o.delivery_address,
+            estimated_price: Number(o.estimated_price),
+            created_at: o.created_at,
+          })),
+        );
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const filtered = orders.filter((order) => {
+    const matchesSearch =
+      !search || order.order_number.toLowerCase().includes(search.toLowerCase());
+    let matchesStatus = true;
+    if (statusFilter === "active") {
+      matchesStatus = ["pending", "confirmed", "assigned", "picked_up", "in_transit"].includes(
+        order.status,
+      );
+    } else if (statusFilter === "delivered") {
+      matchesStatus = order.status === "delivered";
+    } else if (statusFilter === "cancelled") {
+      matchesStatus = ["cancelled", "returned"].includes(order.status);
+    }
     return matchesSearch && matchesStatus;
   });
 
@@ -87,7 +85,6 @@ export default function OrdersPage() {
         </Link>
       </div>
 
-      {/* Filters */}
       <div className="card !p-4 mb-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
@@ -120,14 +117,22 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Orders List */}
       <div className="space-y-3">
-        {filtered.length === 0 ? (
+        {loading && <div className="card text-center py-8 text-muted">טוען...</div>}
+
+        {!loading && filtered.length === 0 && (
           <div className="card text-center py-12">
             <Package className="w-12 h-12 text-muted mx-auto mb-3" />
             <p className="text-muted">לא נמצאו הזמנות</p>
+            {orders.length === 0 && (
+              <Link href="/booking" className="btn-primary inline-flex mt-4">
+                הזמנה ראשונה
+              </Link>
+            )}
           </div>
-        ) : (
+        )}
+
+        {!loading &&
           filtered.map((order) => (
             <div key={order.id} className="card !p-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -157,7 +162,7 @@ export default function OrdersPage() {
                 <div className="flex items-center gap-4">
                   <span className="text-lg font-bold text-primary">{order.estimated_price}₪</span>
                   <Link
-                    href={`/orders/${order.id}`}
+                    href={`/track/${order.order_number}`}
                     className="flex items-center gap-1 text-sm text-secondary hover:text-secondary-dark"
                   >
                     פרטים
@@ -166,8 +171,7 @@ export default function OrdersPage() {
                 </div>
               </div>
             </div>
-          ))
-        )}
+          ))}
       </div>
     </div>
   );

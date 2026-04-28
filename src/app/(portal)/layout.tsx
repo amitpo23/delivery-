@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Package, LayoutDashboard, PlusCircle, ClipboardList, User, LogOut } from "lucide-react";
+import { Package, LayoutDashboard, PlusCircle, ClipboardList, User } from "lucide-react";
 import { COMPANY_SHORT } from "@/constants/services";
+import LogoutButton from "./LogoutButton";
 
 export default function PortalLayout({
   children,
@@ -50,13 +51,7 @@ export default function PortalLayout({
             </Link>
           </nav>
 
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-red-500 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="hidden md:inline">יציאה</span>
-          </Link>
+          <LogoutButton />
         </div>
       </header>
 

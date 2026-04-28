@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 
 const ADMIN_PREFIX = "/admin";
 const DRIVER_PREFIX = "/driver";
+const PORTAL_PREFIXES = ["/dashboard", "/orders", "/profile"] as const;
 
 function isHttpUrl(value: string | undefined): value is string {
   if (!value) return false;
@@ -18,8 +19,9 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const needsAdmin = pathname.startsWith(ADMIN_PREFIX);
   const needsDriver = pathname.startsWith(DRIVER_PREFIX);
+  const needsPortal = PORTAL_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
-  if (!needsAdmin && !needsDriver) return NextResponse.next();
+  if (!needsAdmin && !needsDriver && !needsPortal) return NextResponse.next();
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -72,7 +74,16 @@ export async function middleware(request: NextRequest) {
   const role = profile?.role;
   const allowed =
     (needsAdmin && role === "admin") ||
-    (needsDriver && (role === "driver" || role === "admin"));
+    (needsDriver && (role === "driver" || role === "admin")) ||
+    (needsPortal && role === "customer");
+
+  // Send admins/drivers/dispatchers landing on /dashboard or /orders to
+  // their own home rather than dumping them in a customer portal that
+  // shows nothing useful for their role.
+  if (needsPortal && role && role !== "customer") {
+    const home = role === "admin" || role === "dispatcher" ? "/admin/orders" : "/driver/tasks";
+    return NextResponse.redirect(new URL(home, request.url));
+  }
 
   if (!allowed) {
     return NextResponse.redirect(new URL("/", request.url));
@@ -82,5 +93,14 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/driver/:path*"],
+  matcher: [
+    "/admin/:path*",
+    "/driver/:path*",
+    "/dashboard/:path*",
+    "/dashboard",
+    "/orders/:path*",
+    "/orders",
+    "/profile/:path*",
+    "/profile",
+  ],
 };
