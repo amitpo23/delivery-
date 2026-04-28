@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logAudit } from "@/lib/audit";
+import { getRequestIp } from "@/lib/rate-limit";
 
 const Body = z.object({
   driverId: z.string().uuid(),
@@ -66,6 +68,17 @@ export async function POST(
     order_id: id,
     status: "assigned",
     notes: `Assigned by ${guard.user.email ?? guard.user.id} to driver ${v.data.driverId}`,
+  });
+
+  await logAudit({
+    actorId: guard.user.id,
+    actorEmail: guard.user.email,
+    actorRole: guard.role,
+    action: "order.assign",
+    targetType: "order",
+    targetId: id,
+    after: { driver_id: v.data.driverId, status: "assigned" },
+    ip: getRequestIp(req),
   });
 
   return NextResponse.json({ order: updated });
