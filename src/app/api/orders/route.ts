@@ -8,6 +8,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { generateOrderNumber } from "@/lib/utils";
 import { geocodeAddress } from "@/lib/geocoding/google";
 import { haversineKm } from "@/lib/geo/distance";
+import { rateLimit, getRequestIp } from "@/lib/rate-limit";
 
 const Body = z.object({
   pickupAddress: z.string().min(2),
@@ -51,6 +52,16 @@ const SIZE_TO_PACKAGE_TYPE = {
 const SIZE_TO_WEIGHT_KG = { S: 3, M: 8, L: 20, XL: 40 } as const;
 
 export async function POST(req: Request) {
+  // 10 orders/min per IP. Each /booking submit creates a charge + 2 geocodes,
+  // so the cost of abuse is high — keep this aggressive.
+  const rl = rateLimit(`orders:${getRequestIp(req)}`, { max: 10, refillPerMinute: 10 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec ?? 60) } },
+    );
+  }
+
   let parsed: unknown;
   try {
     parsed = await req.json();

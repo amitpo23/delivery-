@@ -4,6 +4,7 @@ import { calculatePrice, type PackageSize, type Urgency } from "@/lib/pricing/en
 import { estimateZoneDistanceKm, resolveSubZone, resolveZone } from "@/lib/pricing/zones";
 import { geocodeAddress } from "@/lib/geocoding/google";
 import { haversineKm } from "@/lib/geo/distance";
+import { rateLimit, getRequestIp } from "@/lib/rate-limit";
 
 const QuoteRequestSchema = z.object({
   pickupAddress: z.string().min(2),
@@ -21,6 +22,16 @@ const QuoteRequestSchema = z.object({
 });
 
 export async function POST(req: Request) {
+  // 60 quotes/min per IP — the legitimate /booking flow asks for at most a
+  // dozen quotes during shaping; anything beyond that is a scraper or a bot.
+  const rl = rateLimit(`quote:${getRequestIp(req)}`, { max: 60, refillPerMinute: 60 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec ?? 60) } },
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();
