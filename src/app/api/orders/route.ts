@@ -9,6 +9,7 @@ import { generateOrderNumber } from "@/lib/utils";
 import { geocodeAddress } from "@/lib/geocoding/google";
 import { haversineKm } from "@/lib/geo/distance";
 import { rateLimit, getRequestIp } from "@/lib/rate-limit";
+import { validateCoupon, redeemCoupon } from "@/lib/coupons/redeem";
 
 const Body = z.object({
   pickupAddress: z.string().min(2),
@@ -33,6 +34,7 @@ const Body = z.object({
     last4: z.string().regex(/^\d{4}$/).optional(),
   }),
   bookerEmail: z.string().email().optional(),
+  couponCode: z.string().min(2).max(40).optional(),
 });
 
 const URGENCY_TO_SERVICE = {
@@ -123,13 +125,33 @@ export async function POST(req: Request) {
     );
   }
 
+  // Coupon — validated again server-side to prevent client tampering with
+  // discount amount. The total charged reflects the verified discount.
+  let couponId: string | null = null;
+  let couponDiscount = 0;
+  let chargeTotal = fresh.total;
+  if (b.couponCode) {
+    const coupon = await validateCoupon({
+      code: b.couponCode,
+      subtotal: fresh.total,
+      phone: b.pickupContactPhone,
+    });
+    if (coupon.valid && coupon.couponId && coupon.discount) {
+      couponId = coupon.couponId;
+      couponDiscount = coupon.discount;
+      chargeTotal = Math.max(0, Math.round((fresh.total - couponDiscount) * 100) / 100);
+    }
+    // Invalid codes silently fail through — the booking still goes at full
+    // price. The /api/coupons/validate UI surface tells the user upfront.
+  }
+
   const orderNumber = generateOrderNumber();
 
   const provider = getPaymentProvider();
   let charge;
   try {
     charge = await provider.createCharge({
-      amount: fresh.total,
+      amount: chargeTotal,
       currency: "ILS",
       orderId: orderNumber,
       customer: {
@@ -212,7 +234,7 @@ export async function POST(req: Request) {
     distance_km: distanceKm,
     time_window: b.timeWindow,
     estimated_price: fresh.total,
-    final_price: fresh.total,
+    final_price: chargeTotal,
     payment_status: "paid",
     payment_method: "credit_card",
     payment_provider: charge.provider,
@@ -255,9 +277,21 @@ export async function POST(req: Request) {
     notes: "Order created via /booking",
   });
 
+  // Redeem after the order is in — if redemption fails, the order is still
+  // valid; we just lose the audit row. Acceptable trade for atomicity.
+  if (couponId && couponDiscount > 0) {
+    await redeemCoupon({
+      couponId,
+      orderId: inserted.id,
+      phone: b.pickupContactPhone,
+      amount: couponDiscount,
+    });
+  }
+
   return NextResponse.json({
     orderNumber,
     paymentTransactionId: charge.transactionId,
-    total: fresh.total,
+    total: chargeTotal,
+    couponDiscount,
   });
 }
