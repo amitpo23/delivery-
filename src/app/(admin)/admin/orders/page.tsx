@@ -3,9 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { Search, Filter, UserPlus, Eye, Route as RouteIcon } from "lucide-react";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/types";
-import type { OrderStatus } from "@/types";
+import type { OrderStatus, ServiceType } from "@/types";
 import { DRIVER_STATUS_COLORS } from "@/constants/mock-data";
 import { createClient } from "@/lib/supabase/client";
+import { isSlaBreached, slaMinutesRemaining } from "@/lib/orders/sla";
 
 const statusFilters = [
   { value: "all", label: "הכל" },
@@ -343,15 +344,38 @@ export default function AdminOrdersPage() {
                     )}
                   </td>
                   <td className="p-4">
-                    <span
-                      className="px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap"
-                      style={{
-                        backgroundColor: `${ORDER_STATUS_COLORS[order.status]}15`,
-                        color: ORDER_STATUS_COLORS[order.status],
-                      }}
-                    >
-                      {ORDER_STATUS_LABELS[order.status]}
-                    </span>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span
+                        className="px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap"
+                        style={{
+                          backgroundColor: `${ORDER_STATUS_COLORS[order.status]}15`,
+                          color: ORDER_STATUS_COLORS[order.status],
+                        }}
+                      >
+                        {ORDER_STATUS_LABELS[order.status]}
+                      </span>
+                      {(() => {
+                        const isOpen = !["delivered", "cancelled", "returned"].includes(order.status);
+                        if (!isOpen) return null;
+                        const breached = isSlaBreached(order.created_at, order.service_type as ServiceType, null);
+                        const min = slaMinutesRemaining(order.created_at, order.service_type as ServiceType);
+                        if (breached) {
+                          return (
+                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">
+                              איחור {Math.abs(Math.round(min / 60))}h
+                            </span>
+                          );
+                        }
+                        if (min < 60) {
+                          return (
+                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">
+                              {min}m ל-SLA
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
                   </td>
                   <td className="p-4 text-xs text-muted capitalize">
                     {order.service_type.replace("_", " ")}

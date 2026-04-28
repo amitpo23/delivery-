@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/check-stale-orders",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/check-late-orders",
+      "schedule": "10 * * * *"
     }
   ]
 }
