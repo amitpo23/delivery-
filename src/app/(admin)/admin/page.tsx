@@ -1,162 +1,275 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Package, Truck, CheckCircle2, Clock, DollarSign, Star, ArrowLeft, Users, ClipboardList } from "lucide-react";
-import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/types";
-import { MOCK_DRIVERS, MOCK_ADMIN_ORDERS, DRIVER_STATUS_COLORS, WEEKLY_ORDERS_DATA } from "@/constants/mock-data";
-import dynamic from "next/dynamic";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+  Package,
+  Truck,
+  CheckCircle2,
+  Clock,
+  DollarSign,
+  Star,
+  Users,
+  ClipboardList,
+  AlertCircle,
+} from "lucide-react";
 
-const MapView = dynamic(() => import("@/components/shared/MapView"), { ssr: false });
+interface Analytics {
+  range: { since: string; days: number };
+  counts: { total: number; delivered: number; cancelled: number; pending: number; active: number };
+  revenue: { total: number; avg_ticket: number };
+  on_time_rate: number;
+  series: { day: string; orders: number; revenue: number }[];
+  by_service: Record<string, number>;
+  top_zones: { zone: string; count: number }[];
+  drivers: {
+    total: number;
+    online: number;
+    leaderboard: { id: string; name: string; status: string; deliveries: number; rating: number | null }[];
+  };
+  tickets: { open: number; in_progress: number; urgent: number };
+}
 
-const stats = [
-  { label: "הזמנות היום", value: "24", icon: Package, color: "#3B82F6", change: "+12%" },
-  { label: "פעילות עכשיו", value: "5", icon: Clock, color: "#F97316", change: "" },
-  { label: "הושלמו היום", value: "18", icon: CheckCircle2, color: "#10B981", change: "+8%" },
-  { label: "הכנסה היום", value: "₪3,450", icon: DollarSign, color: "#8B5CF6", change: "+15%" },
-  { label: "נהגים פעילים", value: "4", icon: Truck, color: "#EC4899", change: "" },
-  { label: "דירוג ממוצע", value: "4.8", icon: Star, color: "#F59E0B", change: "" },
-];
+const SERVICE_LABELS: Record<string, string> = {
+  express: "אקספרס",
+  same_day: "באותו יום",
+  next_day: "יום למחרת",
+  economy: "חסכון",
+};
 
-export default function AdminDashboard() {
-  const activeDrivers = MOCK_DRIVERS.filter((d) => d.status !== "offline");
-  const mapMarkers = activeDrivers.map((d) => ({
-    id: d.id,
-    lat: d.lat,
-    lng: d.lng,
-    label: d.name,
-    status: d.status === "available" ? "פנוי" : d.status === "busy" ? "עסוק" : "בהפסקה",
-    details: d.vehicle,
-    color: DRIVER_STATUS_COLORS[d.status],
-  }));
+export default function AdminDashboardPage() {
+  const [data, setData] = useState<Analytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/analytics");
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          setError(j.error || "טעינה נכשלה");
+          return;
+        }
+        setData(await res.json());
+      } catch {
+        setError("שגיאת רשת");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading) return <div className="text-center py-20 text-muted">טוען...</div>;
+  if (error || !data) return <div className="text-center py-20 text-red-600">{error}</div>;
+
+  const maxOrders = Math.max(...data.series.map((s) => s.orders), 1);
+  const maxRevenue = Math.max(...data.series.map((s) => s.revenue), 1);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-primary">דשבורד</h1>
-          <p className="text-muted text-sm">סקירה כללית של הפעילות</p>
-        </div>
-        <div className="text-sm text-muted">
-          {new Date().toLocaleDateString("he-IL", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-        </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-primary">דשבורד</h1>
+        <p className="text-muted text-sm">{data.range.days} ימים אחרונים</p>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div key={stat.label} className="card !p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{ backgroundColor: `${stat.color}15` }}
-                >
-                  <Icon className="w-5 h-5" style={{ color: stat.color }} />
-                </div>
-                {stat.change && (
-                  <span className="text-xs text-green-600 font-medium">{stat.change}</span>
-                )}
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <Kpi icon={Package} label="הזמנות" value={data.counts.total.toString()} color="#3B82F6" />
+        <Kpi
+          icon={DollarSign}
+          label="הכנסה"
+          value={`${data.revenue.total.toLocaleString()}₪`}
+          sub={`ממוצע ${data.revenue.avg_ticket}₪`}
+          color="#10B981"
+        />
+        <Kpi
+          icon={CheckCircle2}
+          label="On-time"
+          value={`${data.on_time_rate}%`}
+          color="#F59E0B"
+        />
+        <Kpi
+          icon={AlertCircle}
+          label="פניות פתוחות"
+          value={(data.tickets.open + data.tickets.in_progress).toString()}
+          sub={data.tickets.urgent ? `${data.tickets.urgent} דחופות` : undefined}
+          color={data.tickets.urgent ? "#DC2626" : "#6B7280"}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <Kpi icon={Clock} label="ממתינות" value={data.counts.pending.toString()} color="#F59E0B" small />
+        <Kpi icon={Truck} label="פעילות" value={data.counts.active.toString()} color="#F97316" small />
+        <Kpi icon={CheckCircle2} label="נמסרו" value={data.counts.delivered.toString()} color="#10B981" small />
+        <Kpi icon={Users} label="נהגים מחוברים" value={`${data.drivers.online}/${data.drivers.total}`} color="#8B5CF6" small />
+      </div>
+
+      {/* Time series */}
+      <div className="card !p-4 mb-6">
+        <h2 className="text-sm font-bold text-primary mb-3">הזמנות וההכנסה לאורך 30 ימים</h2>
+        <div className="space-y-1">
+          {data.series.map((day) => (
+            <div key={day.day} className="flex items-center gap-2 text-xs">
+              <div className="w-16 text-muted shrink-0" dir="ltr">
+                {day.day.slice(5)}
               </div>
-              <div className="text-xl font-bold text-primary">{stat.value}</div>
-              <div className="text-xs text-muted">{stat.label}</div>
+              <div className="flex-1 grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="bg-blue-100 h-4 rounded" style={{ width: `${(day.orders / maxOrders) * 100}%` }} />
+                  <span className="text-muted">{day.orders}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="bg-green-100 h-4 rounded"
+                    style={{ width: `${(day.revenue / maxRevenue) * 100}%` }}
+                  />
+                  <span className="text-muted">{day.revenue}₪</span>
+                </div>
+              </div>
             </div>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Mini Live Map */}
-        <div className="card !p-0 overflow-hidden">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-primary flex items-center gap-2">
-              <Truck className="w-5 h-5 text-secondary" />
-              מפת נהגים חיה
-            </h2>
-            <Link href="/admin/drivers" className="text-sm text-secondary hover:text-secondary-dark flex items-center gap-1">
-              מפה מלאה <ArrowLeft className="w-3 h-3" />
-            </Link>
-          </div>
-          <MapView markers={mapMarkers} height="300px" zoom={9} />
+          ))}
         </div>
-
-        {/* Weekly Chart */}
-        <div className="card">
-          <h2 className="font-bold text-primary mb-4 flex items-center gap-2">
-            <Package className="w-5 h-5 text-secondary" />
-            הזמנות השבוע
-          </h2>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={WEEKLY_ORDERS_DATA}>
-              <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip
-                formatter={(value) => [value, "הזמנות"]}
-                labelStyle={{ direction: "rtl" }}
-              />
-              <Bar dataKey="orders" fill="#F97316" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="flex gap-4 text-xs text-muted mt-3 pt-3 border-t border-border">
+          <span>
+            <span className="inline-block w-3 h-3 bg-blue-100 rounded ms-1"></span>הזמנות
+          </span>
+          <span>
+            <span className="inline-block w-3 h-3 bg-green-100 rounded ms-1"></span>הכנסה
+          </span>
         </div>
       </div>
 
-      {/* Recent Orders */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-primary flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-secondary" />
-            הזמנות אחרונות
-          </h2>
-          <Link href="/admin/orders" className="text-sm text-secondary hover:text-secondary-dark flex items-center gap-1">
-            כל ההזמנות <ArrowLeft className="w-3 h-3" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        {/* Service split */}
+        <div className="card !p-4">
+          <h2 className="text-sm font-bold text-primary mb-3">פילוח לפי סוג שירות</h2>
+          {Object.keys(data.by_service).length === 0 ? (
+            <div className="text-center py-6 text-muted text-sm">אין נתונים</div>
+          ) : (
+            <div className="space-y-2">
+              {Object.entries(data.by_service).map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between text-sm">
+                  <span>{SERVICE_LABELS[k] ?? k}</span>
+                  <span className="font-bold">{v}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Top zones */}
+        <div className="card !p-4">
+          <h2 className="text-sm font-bold text-primary mb-3">יעדים מובילים</h2>
+          {data.top_zones.length === 0 ? (
+            <div className="text-center py-6 text-muted text-sm">אין נתונים</div>
+          ) : (
+            <div className="space-y-2">
+              {data.top_zones.map((z) => (
+                <div key={z.zone} className="flex items-center justify-between text-sm">
+                  <span>{z.zone}</span>
+                  <span className="font-bold">{z.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Driver leaderboard */}
+      <div className="card !p-4 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-bold text-primary">לוח מובילי נהגים</h2>
+          <Link href="/admin/drivers" className="text-xs text-secondary hover:text-secondary-dark">
+            כל הנהגים →
           </Link>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-right p-3 font-medium text-muted">מספר</th>
-                <th className="text-right p-3 font-medium text-muted">לקוח</th>
-                <th className="text-right p-3 font-medium text-muted">יעד</th>
-                <th className="text-right p-3 font-medium text-muted">נהג</th>
-                <th className="text-right p-3 font-medium text-muted">סטטוס</th>
-                <th className="text-right p-3 font-medium text-muted">מחיר</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MOCK_ADMIN_ORDERS.slice(0, 5).map((order) => (
-                <tr key={order.id} className="border-b border-border/50 hover:bg-gray-50">
-                  <td className="p-3 font-mono text-xs" dir="ltr">{order.order_number}</td>
-                  <td className="p-3">{order.customer_name}</td>
-                  <td className="p-3 text-muted text-xs max-w-[200px] truncate">{order.delivery_address}</td>
-                  <td className="p-3">{order.driver_name || <span className="text-muted">לא שובץ</span>}</td>
-                  <td className="p-3">
-                    <span
-                      className="px-2 py-1 text-xs font-medium rounded-full"
-                      style={{
-                        backgroundColor: `${ORDER_STATUS_COLORS[order.status]}15`,
-                        color: ORDER_STATUS_COLORS[order.status],
-                      }}
-                    >
-                      {ORDER_STATUS_LABELS[order.status]}
+        {data.drivers.leaderboard.length === 0 ? (
+          <div className="text-center py-6 text-muted text-sm">אין נתונים</div>
+        ) : (
+          <div className="space-y-2">
+            {data.drivers.leaderboard.map((d, idx) => (
+              <div key={d.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-muted w-6">#{idx + 1}</span>
+                  <span className="font-medium">{d.name}</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span>{d.deliveries} משלוחים</span>
+                  {d.rating !== null && (
+                    <span className="flex items-center gap-1">
+                      <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                      {d.rating.toFixed(1)}
                     </span>
-                  </td>
-                  <td className="p-3 font-bold">{order.estimated_price}₪</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Quick links */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <QuickLink href="/admin/orders" icon={ClipboardList} label="הזמנות" />
+        <QuickLink href="/admin/tickets" icon={AlertCircle} label="פניות" />
+        <QuickLink href="/admin/customers" icon={Users} label="לקוחות" />
+        <QuickLink href="/admin/live" icon={Truck} label="מפה חיה" />
       </div>
     </div>
+  );
+}
+
+function Kpi({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  color,
+  small,
+}: {
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  label: string;
+  value: string;
+  sub?: string;
+  color: string;
+  small?: boolean;
+}) {
+  return (
+    <div className={`card flex items-center gap-3 ${small ? "!p-2" : "!p-4"}`}>
+      <div
+        className={`rounded-xl flex items-center justify-center shrink-0 ${
+          small ? "w-9 h-9" : "w-12 h-12"
+        }`}
+        style={{ backgroundColor: `${color}15` }}
+      >
+        <Icon className={small ? "w-4 h-4" : "w-6 h-6"} style={{ color }} />
+      </div>
+      <div>
+        <div className={`font-bold text-primary ${small ? "text-base" : "text-2xl"}`}>{value}</div>
+        <div className="text-xs text-muted">{label}</div>
+        {sub && <div className="text-[10px] text-muted">{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+function QuickLink({
+  href,
+  icon: Icon,
+  label,
+}: {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="card !p-3 flex items-center gap-2 hover:bg-gray-50 transition-colors"
+    >
+      <Icon className="w-5 h-5 text-secondary" />
+      <span className="text-sm font-medium">{label}</span>
+    </Link>
   );
 }
