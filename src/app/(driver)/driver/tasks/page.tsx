@@ -6,6 +6,7 @@ import { Navigation, Phone, Package, MapPin, CheckCircle2 } from "lucide-react";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/types";
 import type { OrderStatus } from "@/types";
 import { createClient } from "@/lib/supabase/client";
+import LocationTracker from "@/components/driver/LocationTracker";
 
 interface DriverOrder {
   id: string;
@@ -113,6 +114,8 @@ export default function DriverTasksPage() {
         <h1 className="text-xl font-bold text-primary">המשימות שלי</h1>
         <div className="text-sm text-muted">{activeCount} פעילות</div>
       </div>
+
+      <LocationTracker />
 
       {error && (
         <div className="card !p-3 mb-4 bg-red-50 border-red-200 text-red-700 text-sm">
