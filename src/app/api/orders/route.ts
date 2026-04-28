@@ -4,6 +4,7 @@ import { calculatePrice } from "@/lib/pricing/engine";
 import { estimateZoneDistanceKm, resolveSubZone, resolveZone } from "@/lib/pricing/zones";
 import { getPaymentProvider, PaymentError } from "@/lib/payments";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { generateOrderNumber } from "@/lib/utils";
 
 const Body = z.object({
@@ -119,6 +120,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: reason }, { status: 402 });
   }
 
+  // If the booker is signed in and already has a customer row, attach the
+  // order to it so /orders + /dashboard surface this booking through RLS.
+  // Guests (or signed-in users without a customer row yet) keep customer_id
+  // null and rely on booker_* fields + /track/[orderNumber] for follow-up.
+  let customerId: string | null = null;
+  try {
+    const session = await createServerClient();
+    const {
+      data: { user },
+    } = await session.auth.getUser();
+    if (user) {
+      const { data: customer } = await session
+        .from("customers")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (customer) customerId = customer.id;
+    }
+  } catch {
+    // Server client failure is non-fatal — fall through and treat as guest.
+  }
+
   let admin;
   try {
     admin = createAdminClient();
@@ -137,7 +160,7 @@ export async function POST(req: Request) {
 
   const { data: inserted, error } = await admin.from("orders").insert({
     order_number: orderNumber,
-    customer_id: null,
+    customer_id: customerId,
     booker_full_name: b.card.holderName,
     booker_phone: b.pickupContactPhone,
     booker_email: b.bookerEmail ?? null,

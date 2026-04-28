@@ -1,59 +1,91 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Package, PlusCircle, Clock, CheckCircle2, XCircle, ArrowLeft, Truck } from "lucide-react";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/types";
-import type { Order } from "@/types";
+import type { OrderStatus } from "@/types";
+import { createClient } from "@/lib/supabase/client";
 
-// Mock data for demo
-const mockOrders: Partial<Order>[] = [
-  {
-    id: "1",
-    order_number: "DEL-ABC123-XYZ",
-    status: "in_transit",
-    service_type: "express",
-    pickup_address: "חיפה, רח' הרצל 15",
-    delivery_address: "כרמיאל, רח' הגליל 22",
-    estimated_price: 89,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    order_number: "DEL-DEF456-ABC",
-    status: "delivered",
-    service_type: "next_day",
-    pickup_address: "חיפה, רח' מוריה 8",
-    delivery_address: "נהריה, רח' הגעתון 5",
-    estimated_price: 45,
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-    delivered_at: new Date(Date.now() - 43200000).toISOString(),
-  },
-  {
-    id: "3",
-    order_number: "DEL-GHI789-DEF",
-    status: "pending",
-    service_type: "same_day",
-    pickup_address: "קריית ביאליק, רח' דרך עכו 45",
-    delivery_address: "עכו, העיר העתיקה",
-    estimated_price: 55,
-    created_at: new Date(Date.now() - 3600000).toISOString(),
-  },
-];
+interface DashOrder {
+  id: string;
+  order_number: string;
+  status: OrderStatus;
+  pickup_address: string;
+  delivery_address: string;
+  estimated_price: number;
+  created_at: string;
+}
 
-const stats = [
-  { label: "פעילות", value: 2, icon: Truck, color: "#F97316" },
-  { label: "הושלמו", value: 15, icon: CheckCircle2, color: "#10B981" },
-  { label: "ממתינות", value: 1, icon: Clock, color: "#F59E0B" },
-  { label: "בוטלו", value: 0, icon: XCircle, color: "#EF4444" },
-];
+interface StatCounts {
+  active: number;
+  delivered: number;
+  pending: number;
+  cancelled: number;
+}
 
 export default function DashboardPage() {
+  const [orders, setOrders] = useState<DashOrder[]>([]);
+  const [counts, setCounts] = useState<StatCounts>({ active: 0, delivered: 0, pending: 0, cancelled: 0 });
+  const [name, setName] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const supabase = createClient();
+      const { data: userResult } = await supabase.auth.getUser();
+      if (!userResult.user) {
+        setLoading(false);
+        return;
+      }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", userResult.user.id)
+        .maybeSingle();
+      if (profile?.full_name) setName(profile.full_name);
+
+      const { data } = await supabase
+        .from("orders")
+        .select("id, order_number, status, pickup_address, delivery_address, estimated_price, created_at")
+        .order("created_at", { ascending: false });
+
+      if (data) {
+        const all = data.map((o) => ({
+          id: o.id,
+          order_number: o.order_number,
+          status: o.status as OrderStatus,
+          pickup_address: o.pickup_address,
+          delivery_address: o.delivery_address,
+          estimated_price: Number(o.estimated_price),
+          created_at: o.created_at,
+        }));
+        setOrders(all.slice(0, 5));
+        setCounts({
+          active: all.filter((o) => ["assigned", "picked_up", "in_transit"].includes(o.status)).length,
+          delivered: all.filter((o) => o.status === "delivered").length,
+          pending: all.filter((o) => ["pending", "confirmed"].includes(o.status)).length,
+          cancelled: all.filter((o) => ["cancelled", "returned"].includes(o.status)).length,
+        });
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const stats = [
+    { label: "פעילות", value: counts.active, icon: Truck, color: "#F97316" },
+    { label: "הושלמו", value: counts.delivered, icon: CheckCircle2, color: "#10B981" },
+    { label: "ממתינות", value: counts.pending, icon: Clock, color: "#F59E0B" },
+    { label: "בוטלו", value: counts.cancelled, icon: XCircle, color: "#EF4444" },
+  ];
+
   return (
     <div>
-      {/* Welcome */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-primary">שלום, אליהב!</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-primary">
+            שלום{name ? `, ${name.split(" ")[0]}` : ""}!
+          </h1>
           <p className="text-muted mt-1">ברוך הבא למערכת ההזמנות שלך</p>
         </div>
         <Link href="/booking" className="btn-primary">
@@ -62,7 +94,6 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {stats.map((stat) => {
           const Icon = stat.icon;
@@ -83,7 +114,6 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Recent Orders */}
       <div className="card">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold text-primary flex items-center gap-2">
@@ -96,8 +126,20 @@ export default function DashboardPage() {
           </Link>
         </div>
 
+        {loading && <div className="text-center py-8 text-muted">טוען...</div>}
+
+        {!loading && orders.length === 0 && (
+          <div className="text-center py-12 text-muted">
+            <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p>אין הזמנות עדיין</p>
+            <Link href="/booking" className="btn-primary inline-flex mt-4">
+              הזמנה ראשונה
+            </Link>
+          </div>
+        )}
+
         <div className="space-y-4">
-          {mockOrders.map((order) => (
+          {orders.map((order) => (
             <div
               key={order.id}
               className="flex flex-col md:flex-row md:items-center justify-between p-4 bg-gray-50 rounded-xl gap-3"
@@ -105,7 +147,7 @@ export default function DashboardPage() {
               <div className="flex items-center gap-3">
                 <div
                   className="w-3 h-3 rounded-full shrink-0"
-                  style={{ backgroundColor: ORDER_STATUS_COLORS[order.status!] }}
+                  style={{ backgroundColor: ORDER_STATUS_COLORS[order.status] }}
                 />
                 <div>
                   <div className="font-medium text-primary text-sm" dir="ltr">
@@ -121,17 +163,17 @@ export default function DashboardPage() {
                 <span
                   className="px-3 py-1 text-xs font-medium rounded-full"
                   style={{
-                    backgroundColor: `${ORDER_STATUS_COLORS[order.status!]}15`,
-                    color: ORDER_STATUS_COLORS[order.status!],
+                    backgroundColor: `${ORDER_STATUS_COLORS[order.status]}15`,
+                    color: ORDER_STATUS_COLORS[order.status],
                   }}
                 >
-                  {ORDER_STATUS_LABELS[order.status!]}
+                  {ORDER_STATUS_LABELS[order.status]}
                 </span>
                 <span className="text-sm font-bold text-primary">
                   {order.estimated_price}₪
                 </span>
                 <Link
-                  href={`/orders/${order.id}`}
+                  href={`/track/${order.order_number}`}
                   className="text-sm text-secondary hover:text-secondary-dark"
                 >
                   פרטים
