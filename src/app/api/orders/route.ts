@@ -6,6 +6,8 @@ import { getPaymentProvider, PaymentError } from "@/lib/payments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { generateOrderNumber } from "@/lib/utils";
+import { geocodeAddress } from "@/lib/geocoding/google";
+import { haversineKm } from "@/lib/geo/distance";
 
 const Body = z.object({
   pickupAddress: z.string().min(2),
@@ -68,12 +70,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Address outside coverage area" }, { status: 422 });
   }
 
-  // Distance is computed server-side from the resolved zones; the client's
-  // `distanceKm` is treated as advisory only and clamped to >= the zone-pair
-  // floor. This blocks the "force a long delivery to be priced as a short one"
-  // attack flagged in the PR #4 review.
+  // Distance: geocode both endpoints when possible and use the great-circle
+  // distance as a tighter floor than the coarse zone matrix. The client's
+  // distanceKm stays advisory (clamped). No-geocode case is unchanged.
+  const [pickupGeo, deliveryGeo] = await Promise.all([
+    geocodeAddress(b.pickupAddress),
+    geocodeAddress(b.deliveryAddress),
+  ]);
   const zoneFloorKm = estimateZoneDistanceKm(pickupZone, deliveryZone);
-  const distanceKm = Math.max(zoneFloorKm, Math.min(b.distanceKm, 500));
+  const geoFloorKm =
+    pickupGeo && deliveryGeo ? haversineKm(pickupGeo, deliveryGeo) : 0;
+  const distanceKm = Math.max(zoneFloorKm, geoFloorKm, Math.min(b.distanceKm, 500));
 
   const pickupSubZone = resolveSubZone(b.pickupAddress, pickupZone);
   const deliverySubZone = resolveSubZone(b.deliveryAddress, deliveryZone);
@@ -91,7 +98,14 @@ export async function POST(req: Request) {
     subZoneFactor,
   });
 
-  if (Math.abs(fresh.total - b.quoteTotal) > 1) {
+  // Tolerance widened from ±1₪ to ±3₪ now that the quote and the order both
+  // hit the Google Geocoder. On serverless cold starts the geocoding LRU
+  // cache isn't shared between instances, so two calls for the same address
+  // can return slightly different lat/lng (sub-meter) and yield a Haversine
+  // delta worth a few agorot once it propagates through the size/zone/urgency
+  // multipliers. ±3₪ is well below "the user got a different price" UX harm
+  // and well above the realistic floating-point/geocoder drift.
+  if (Math.abs(fresh.total - b.quoteTotal) > 3) {
     return NextResponse.json(
       { error: "Price mismatch — please refresh", expected: fresh.total, recomputed: fresh.total },
       { status: 409 }
@@ -167,9 +181,13 @@ export async function POST(req: Request) {
     status: "pending",
     service_type: URGENCY_TO_SERVICE[b.urgency],
     pickup_address: b.pickupAddress,
+    pickup_lat: pickupGeo?.lat ?? null,
+    pickup_lng: pickupGeo?.lng ?? null,
     pickup_contact_name: b.pickupContactName,
     pickup_contact_phone: b.pickupContactPhone,
     delivery_address: b.deliveryAddress,
+    delivery_lat: deliveryGeo?.lat ?? null,
+    delivery_lng: deliveryGeo?.lng ?? null,
     delivery_contact_name: b.deliveryContactName,
     delivery_contact_phone: b.deliveryContactPhone,
     package_type: SIZE_TO_PACKAGE_TYPE[b.size],

@@ -15,12 +15,14 @@ import {
   Menu,
   X,
   Bell,
+  Map,
 } from "lucide-react";
 import { COMPANY_SHORT } from "@/constants/services";
 
 const sidebarLinks = [
   { href: "/admin", label: "דשבורד", icon: LayoutDashboard },
   { href: "/admin/orders", label: "הזמנות", icon: ClipboardList },
+  { href: "/admin/live", label: "מפה חיה", icon: Map },
   { href: "/admin/drivers", label: "נהגים", icon: Truck },
   { href: "/admin/customers", label: "לקוחות", icon: Users },
   { href: "/admin/finance", label: "כספים", icon: DollarSign },

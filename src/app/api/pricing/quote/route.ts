@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { calculatePrice, type PackageSize, type Urgency } from "@/lib/pricing/engine";
 import { estimateZoneDistanceKm, resolveSubZone, resolveZone } from "@/lib/pricing/zones";
+import { geocodeAddress } from "@/lib/geocoding/google";
+import { haversineKm } from "@/lib/geo/distance";
 
 const QuoteRequestSchema = z.object({
   pickupAddress: z.string().min(2),
@@ -55,7 +57,18 @@ export async function POST(req: Request) {
   }
 
   const zoneFloorKm = estimateZoneDistanceKm(pickupZone, deliveryZone);
-  const effectiveDistanceKm = Math.max(zoneFloorKm, Math.min(distanceKm ?? 0, 500));
+
+  // Geocode both endpoints in parallel; use the geodesic distance as a tighter
+  // floor than the coarse zone-pair matrix when we have it. Falls back to the
+  // zone matrix on any geocode failure (no API key, network, no result).
+  const [pickupGeo, deliveryGeo] = await Promise.all([
+    geocodeAddress(pickupAddress),
+    geocodeAddress(deliveryAddress),
+  ]);
+  const geoDistanceKm =
+    pickupGeo && deliveryGeo ? haversineKm(pickupGeo, deliveryGeo) : null;
+  const groundFloorKm = Math.max(zoneFloorKm, geoDistanceKm ?? 0);
+  const effectiveDistanceKm = Math.max(groundFloorKm, Math.min(distanceKm ?? 0, 500));
 
   const pickupSubZone = resolveSubZone(pickupAddress, pickupZone);
   const deliverySubZone = resolveSubZone(deliveryAddress, deliveryZone);
@@ -77,9 +90,16 @@ export async function POST(req: Request) {
   return NextResponse.json({
     quote,
     distanceKm: effectiveDistanceKm,
+    distanceSource: geoDistanceKm !== null ? "geocoded" : "zone-floor",
     subZones: {
       pickup: pickupSubZone.name || null,
       delivery: deliverySubZone.name || null,
     },
+    coordinates: pickupGeo && deliveryGeo
+      ? {
+          pickup: { lat: pickupGeo.lat, lng: pickupGeo.lng },
+          delivery: { lat: deliveryGeo.lat, lng: deliveryGeo.lng },
+        }
+      : null,
   });
 }
