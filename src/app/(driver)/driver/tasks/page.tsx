@@ -7,6 +7,7 @@ import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/types";
 import type { OrderStatus } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import LocationTracker from "@/components/driver/LocationTracker";
+import ShiftToggle from "@/components/driver/ShiftToggle";
 
 interface DriverOrder {
   id: string;
@@ -114,6 +115,8 @@ export default function DriverTasksPage() {
         <h1 className="text-xl font-bold text-primary">המשימות שלי</h1>
         <div className="text-sm text-muted">{activeCount} פעילות</div>
       </div>
+
+      <ShiftToggle />
 
       <Link
         href="/driver/route"
