@@ -13,6 +13,12 @@ export interface PriceRequest {
   insurance?: boolean;
   declaredValue?: number;
   surge?: number;
+  /**
+   * Optional sub-zone multiplier (neighborhood / street-level surcharge).
+   * Resolved from pickup/delivery sub-zones via resolveSubZone() in zones.ts.
+   * Defaults to 1.0 — no surcharge — so existing callers behave identically.
+   */
+  subZoneFactor?: number;
 }
 
 export interface PriceQuote {
@@ -20,6 +26,7 @@ export interface PriceQuote {
   distanceCost: number;
   weightFactor: number;
   zoneFactor: number;
+  subZoneFactor: number;
   urgencyFactor: number;
   fragileSurcharge: number;
   insuranceFee: number;
@@ -77,9 +84,11 @@ export function calculatePrice(req: PriceRequest): PriceQuote {
 
   const weightFactor = SIZE_FACTORS[req.size];
   const zoneFactor = Math.max(req.pickupZone.multiplier, req.deliveryZone.multiplier);
+  const subZoneFactor = req.subZoneFactor ?? 1.0;
   const urgencyFactor = URGENCY_FACTORS[req.urgency];
 
-  const core = (basePrice + distanceCost) * weightFactor * zoneFactor * urgencyFactor * surge;
+  const core =
+    (basePrice + distanceCost) * weightFactor * zoneFactor * subZoneFactor * urgencyFactor * surge;
   const fragileSurcharge = req.fragile ? FRAGILE_SURCHARGE : 0;
   const insuranceFee =
     req.insurance && req.declaredValue && req.declaredValue > 0
@@ -98,6 +107,7 @@ export function calculatePrice(req: PriceRequest): PriceQuote {
     distanceCost,
     weightFactor,
     zoneFactor,
+    subZoneFactor,
     urgencyFactor,
     fragileSurcharge,
     insuranceFee,
@@ -109,7 +119,8 @@ export function calculatePrice(req: PriceRequest): PriceQuote {
     breakdown: {
       pickupZone: req.pickupZone.name,
       deliveryZone: req.deliveryZone.name,
-      formula: "((base + km × ₪/km) × size × zone × urgency × surge) + fragile + insurance + VAT",
+      formula:
+        "((base + km × ₪/km) × size × zone × subZone × urgency × surge) + fragile + insurance + VAT",
     },
   };
 }

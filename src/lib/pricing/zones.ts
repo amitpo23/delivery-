@@ -162,6 +162,76 @@ export function getZoneById(id: string): PricingZone | null {
 }
 
 /**
+ * Sub-zone overrides for known neighborhoods/streets that justify a small
+ * surcharge on top of the base zone (parking, narrow access, hilltop,
+ * border-adjacent, etc). Patterns are word-boundary matched against the
+ * normalized address. The default for any unmatched address is multiplier 1.0.
+ */
+export interface SubZone {
+  name: string;
+  patterns: readonly string[];
+  multiplier: number;
+}
+
+export const SUB_ZONES: Record<string, readonly SubZone[]> = {
+  haifa: [
+    {
+      name: "כרמל",
+      patterns: ["כרמל", "סטלה מאריס", "אחוזה", "רמת בגין", "מרכז הכרמל"],
+      multiplier: 1.1,
+    },
+    { name: "הדר", patterns: ["הדר"], multiplier: 1.05 },
+    { name: "נווה שאנן", patterns: ["נווה שאנן"], multiplier: 1.05 },
+    { name: "רוממה", patterns: ["רוממה"], multiplier: 1.05 },
+  ],
+  afula: [
+    { name: "עפולה עילית", patterns: ["עפולה עילית"], multiplier: 1.05 },
+  ],
+  beit_shean: [
+    { name: "מעלה גלבוע", patterns: ["מעלה גלבוע"], multiplier: 1.1 },
+    { name: "רויה", patterns: ["רויה"], multiplier: 1.1 },
+    { name: "מסילות", patterns: ["מסילות"], multiplier: 1.05 },
+  ],
+  gilboa: [
+    { name: "מגן שאול", patterns: ["מגן שאול"], multiplier: 1.05 },
+  ],
+  megido: [],
+  taanachim: [],
+};
+
+const SUB_ZONE_DEFAULT: SubZone = { name: "", patterns: [], multiplier: 1.0 };
+
+/**
+ * Returns the sub-zone of an address inside a given zone. Earliest-position
+ * + longest-pattern wins, mirroring resolveZone(). Returns multiplier 1.0
+ * when the address doesn't match any known sub-zone (including all of the
+ * mo'atza-azurit zones, which don't have intra-zone variation worth pricing).
+ */
+export function resolveSubZone(address: string, zone: PricingZone): SubZone {
+  const subZones = SUB_ZONES[zone.id];
+  if (!subZones || subZones.length === 0 || !address) return SUB_ZONE_DEFAULT;
+
+  const padded = " " + normalize(address) + " ";
+  let best: { idx: number; patternLen: number; subZone: SubZone } | null = null;
+
+  for (const sz of subZones) {
+    for (const pattern of sz.patterns) {
+      const needle = " " + normalize(pattern) + " ";
+      const idx = padded.indexOf(needle);
+      if (idx < 0) continue;
+      if (
+        !best ||
+        idx < best.idx ||
+        (idx === best.idx && pattern.length > best.patternLen)
+      ) {
+        best = { idx, patternLen: pattern.length, subZone: sz };
+      }
+    }
+  }
+  return best?.subZone ?? SUB_ZONE_DEFAULT;
+}
+
+/**
  * Coarse distance estimate (km) between two zones — used as a server-side
  * floor for pricing so the client cannot shrink the price by lying about
  * `distanceKm`. Same-zone trips assume 5 km of city driving. Cross-zone

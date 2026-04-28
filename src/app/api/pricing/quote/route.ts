@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { calculatePrice, type PackageSize, type Urgency } from "@/lib/pricing/engine";
-import { estimateZoneDistanceKm, resolveZone } from "@/lib/pricing/zones";
+import { estimateZoneDistanceKm, resolveSubZone, resolveZone } from "@/lib/pricing/zones";
 
 const QuoteRequestSchema = z.object({
   pickupAddress: z.string().min(2),
@@ -57,6 +57,10 @@ export async function POST(req: Request) {
   const zoneFloorKm = estimateZoneDistanceKm(pickupZone, deliveryZone);
   const effectiveDistanceKm = Math.max(zoneFloorKm, Math.min(distanceKm ?? 0, 500));
 
+  const pickupSubZone = resolveSubZone(pickupAddress, pickupZone);
+  const deliverySubZone = resolveSubZone(deliveryAddress, deliveryZone);
+  const subZoneFactor = Math.max(pickupSubZone.multiplier, deliverySubZone.multiplier);
+
   const quote = calculatePrice({
     pickupZone,
     deliveryZone,
@@ -67,7 +71,15 @@ export async function POST(req: Request) {
     insurance,
     declaredValue,
     surge,
+    subZoneFactor,
   });
 
-  return NextResponse.json({ quote, distanceKm: effectiveDistanceKm });
+  return NextResponse.json({
+    quote,
+    distanceKm: effectiveDistanceKm,
+    subZones: {
+      pickup: pickupSubZone.name || null,
+      delivery: deliverySubZone.name || null,
+    },
+  });
 }

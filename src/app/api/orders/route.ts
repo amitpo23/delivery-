@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { calculatePrice } from "@/lib/pricing/engine";
-import { estimateZoneDistanceKm, resolveZone } from "@/lib/pricing/zones";
+import { estimateZoneDistanceKm, resolveSubZone, resolveZone } from "@/lib/pricing/zones";
 import { getPaymentProvider, PaymentError } from "@/lib/payments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateOrderNumber } from "@/lib/utils";
@@ -74,6 +74,10 @@ export async function POST(req: Request) {
   const zoneFloorKm = estimateZoneDistanceKm(pickupZone, deliveryZone);
   const distanceKm = Math.max(zoneFloorKm, Math.min(b.distanceKm, 500));
 
+  const pickupSubZone = resolveSubZone(b.pickupAddress, pickupZone);
+  const deliverySubZone = resolveSubZone(b.deliveryAddress, deliveryZone);
+  const subZoneFactor = Math.max(pickupSubZone.multiplier, deliverySubZone.multiplier);
+
   const fresh = calculatePrice({
     pickupZone,
     deliveryZone,
@@ -83,6 +87,7 @@ export async function POST(req: Request) {
     fragile: b.fragile,
     insurance: b.insurance,
     declaredValue: b.declaredValue,
+    subZoneFactor,
   });
 
   if (Math.abs(fresh.total - b.quoteTotal) > 1) {
