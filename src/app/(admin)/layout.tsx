@@ -17,6 +17,7 @@ import {
   Bell,
   Map,
   AlertCircle,
+  History,
 } from "lucide-react";
 import { COMPANY_SHORT } from "@/constants/services";
 
@@ -28,6 +29,7 @@ const sidebarLinks = [
   { href: "/admin/drivers", label: "נהגים", icon: Truck },
   { href: "/admin/customers", label: "לקוחות", icon: Users },
   { href: "/admin/finance", label: "כספים", icon: DollarSign },
+  { href: "/admin/audit", label: "יומן", icon: History },
   { href: "/admin/settings", label: "הגדרות", icon: Settings },
 ];
 

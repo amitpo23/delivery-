@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logAudit } from "@/lib/audit";
+import { getRequestIp } from "@/lib/rate-limit";
 
 const PatchBody = z.object({
   notes: z.string().nullable().optional(),
@@ -145,6 +147,12 @@ export async function PATCH(
   }
 
   const admin = createAdminClient();
+  const { data: before } = await admin
+    .from("customers")
+    .select("notes, tags")
+    .eq("id", id)
+    .maybeSingle();
+
   const { data, error } = await admin
     .from("customers")
     .update(update)
@@ -155,5 +163,18 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  await logAudit({
+    actorId: guard.user.id,
+    actorEmail: guard.user.email,
+    actorRole: guard.role,
+    action: "customer.update",
+    targetType: "customer",
+    targetId: id,
+    before: before ?? undefined,
+    after: data ?? undefined,
+    ip: getRequestIp(req),
+  });
+
   return NextResponse.json({ customer: data });
 }
