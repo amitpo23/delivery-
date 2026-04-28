@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   MapPin,
@@ -113,6 +113,45 @@ export default function BookingPage() {
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState<{ orderNumber: string } | null>(null);
+
+  // Prefill from query string when arriving from a bot deep-link or the
+  // homepage price calculator. Read on mount only — we don't want users
+  // changing one field to trigger a remount that resets their other edits.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const patch: Partial<FormState> = {};
+    const from = params.get("from");
+    const to = params.get("to");
+    const size = params.get("size");
+    const urgency = params.get("urgency");
+    const name = params.get("name");
+    const pickupPhone = params.get("pickupPhone");
+    const deliveryPhone = params.get("deliveryPhone");
+    if (from) patch.pickupAddress = from;
+    if (to) patch.deliveryAddress = to;
+    if (size === "S" || size === "M" || size === "L" || size === "XL") patch.size = size;
+    if (
+      urgency === "express" ||
+      urgency === "same_day" ||
+      urgency === "next_day" ||
+      urgency === "economy"
+    ) {
+      patch.urgency = urgency;
+    }
+    // The bot collects only the booker's name (= sender at pickup). The
+    // recipient's name is a separate field and stays empty so the user
+    // can fill it in at /booking — overwriting it with the booker's name
+    // would silently mislabel deliveries.
+    if (name) {
+      patch.pickupContactName = name;
+    }
+    if (pickupPhone) patch.pickupContactPhone = pickupPhone;
+    if (deliveryPhone) patch.deliveryContactPhone = deliveryPhone;
+    if (Object.keys(patch).length > 0) {
+      setForm((prev) => ({ ...prev, ...patch }));
+    }
+  }, []);
 
   const distanceKm = useMemo(
     () => estimateDistanceKm(form.pickupAddress, form.deliveryAddress),
