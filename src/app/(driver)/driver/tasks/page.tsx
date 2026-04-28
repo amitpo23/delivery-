@@ -115,6 +115,17 @@ export default function DriverTasksPage() {
         <div className="text-sm text-muted">{activeCount} פעילות</div>
       </div>
 
+      <Link
+        href="/driver/route"
+        className="card !p-3 mb-4 flex items-center justify-between hover:bg-blue-50 transition-colors"
+      >
+        <div>
+          <div className="text-sm font-medium text-primary">תצוגת נסיעה משותפת</div>
+          <div className="text-xs text-muted">לראות את כל העצירות ברצף, אם הוקצה לך נסיעה</div>
+        </div>
+        <span className="text-secondary">→</span>
+      </Link>
+
       <LocationTracker />
 
       {error && (
