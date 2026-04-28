@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Heebo, Inter } from "next/font/google";
 import "./globals.css";
+import PWARegister from "@/components/PWARegister";
 
 const heebo = Heebo({
   subsets: ["hebrew", "latin"],
@@ -27,6 +28,18 @@ export const metadata: Metadata = {
     "אליהב כהן",
     "משלוחים בצפון",
   ],
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "אליהב משלוחים",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1E3A5F",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -38,6 +51,7 @@ export default function RootLayout({
     <html lang="he" dir="rtl" className={`${heebo.variable} ${inter.variable}`}>
       <body className="min-h-screen bg-background antialiased">
         {children}
+        <PWARegister />
       </body>
     </html>
   );
