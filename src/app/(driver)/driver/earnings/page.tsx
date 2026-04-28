@@ -1,141 +1,207 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { DollarSign, TrendingUp, Package, Calendar } from "lucide-react";
 
 type Period = "today" | "week" | "month";
 
-const earningsData = {
-  today: {
-    total: 520,
-    deliveries: 8,
-    bonus: 50,
-    tips: 30,
-    breakdown: [
-      { id: "1", orderNumber: "DEL-A1B2C3-X1", amount: 65, type: "אקספרס", time: "08:45" },
-      { id: "2", orderNumber: "DEL-D4E5F6-Y2", amount: 55, type: "אותו יום", time: "09:30" },
-      { id: "3", orderNumber: "DEL-G7H8I9-Z3", amount: 72, type: "אקספרס", time: "10:15" },
-      { id: "4", orderNumber: "DEL-J0K1L2-W4", amount: 45, type: "יום למחרת", time: "11:00" },
-      { id: "5", orderNumber: "DEL-M3N4O5-V5", amount: 58, type: "אותו יום", time: "12:20" },
-      { id: "6", orderNumber: "DEL-P6Q7R8-U6", amount: 65, type: "אקספרס", time: "14:00" },
-      { id: "7", orderNumber: "DEL-S9T0U1-T7", amount: 80, type: "אקספרס", time: "15:30" },
-      { id: "8", orderNumber: "DEL-V2W3X4-S8", amount: 80, type: "אקספרס", time: "16:45" },
-    ],
-  },
-  week: {
-    total: 2800,
-    deliveries: 42,
-    bonus: 200,
-    tips: 150,
-    breakdown: [],
-  },
-  month: {
-    total: 11200,
-    deliveries: 168,
-    bonus: 800,
-    tips: 620,
-    breakdown: [],
-  },
+interface Earnings {
+  period: Period;
+  commissionRate: number;
+  totals: {
+    commission: number;
+    bonus: number;
+    tip: number;
+    penalty: number;
+    deliveries: number;
+    net: number;
+  };
+  breakdown: {
+    id: string;
+    order_number: string;
+    service_type: string;
+    price: number;
+    commission: number;
+    delivered_at: string;
+  }[];
+  bonuses: {
+    id: string;
+    amount: number;
+    type: string;
+    description: string | null;
+    created_at: string;
+  }[];
+}
+
+const SERVICE_LABELS: Record<string, string> = {
+  express: "אקספרס",
+  same_day: "באותו יום",
+  next_day: "יום למחרת",
+  economy: "חסכון",
+};
+
+const PERIOD_LABELS: Record<Period, string> = {
+  today: "היום",
+  week: "השבוע",
+  month: "החודש",
 };
 
 export default function DriverEarningsPage() {
-  const [period, setPeriod] = useState<Period>("today");
-  const data = earningsData[period];
+  const [period, setPeriod] = useState<Period>("week");
+  const [data, setData] = useState<Earnings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchEarnings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/driver/earnings?period=${period}`);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setError(j.error || "טעינה נכשלה");
+        return;
+      }
+      setData(await res.json());
+      setError(null);
+    } catch {
+      setError("שגיאת רשת");
+    } finally {
+      setLoading(false);
+    }
+  }, [period]);
+
+  useEffect(() => {
+    fetchEarnings();
+  }, [fetchEarnings]);
+
+  if (loading && !data) return <div className="text-center py-20 text-muted">טוען...</div>;
+  if (error) return <div className="text-center py-20 text-red-600">{error}</div>;
+  if (!data) return null;
+
+  const t = data.totals;
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-primary mb-4">הרווחים שלי</h1>
-
-      {/* Period Tabs */}
-      <div className="flex gap-2 mb-6">
-        {[
-          { value: "today" as const, label: "היום" },
-          { value: "week" as const, label: "השבוע" },
-          { value: "month" as const, label: "החודש" },
-        ].map((tab) => (
-          <button
-            key={tab.value}
-            onClick={() => setPeriod(tab.value)}
-            className={`flex-1 py-2.5 text-sm rounded-xl font-medium transition-colors ${
-              period === tab.value
-                ? "bg-primary text-white"
-                : "bg-white border border-border text-gray-600"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Total Earnings */}
-      <div className="card !p-6 mb-4 bg-gradient-to-l from-primary to-primary-light text-white !border-0">
-        <div className="text-sm text-white/60 mb-1">סה&quot;כ רווח</div>
-        <div className="text-4xl font-bold">{data.total.toLocaleString()}₪</div>
-        <div className="text-sm text-white/60 mt-1">
-          {period === "today" ? "היום" : period === "week" ? "השבוע" : "החודש"}
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-bold text-primary">ההכנסות שלי</h1>
+        <div className="flex gap-1">
+          {(["today", "week", "month"] as Period[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                period === p ? "bg-primary text-white" : "bg-gray-100 text-gray-600"
+              }`}
+            >
+              {PERIOD_LABELS[p]}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="card !p-3 text-center">
-          <Package className="w-5 h-5 text-blue-500 mx-auto mb-1" />
-          <div className="text-lg font-bold text-primary">{data.deliveries}</div>
-          <div className="text-xs text-muted">משלוחים</div>
-        </div>
-        <div className="card !p-3 text-center">
-          <TrendingUp className="w-5 h-5 text-green-500 mx-auto mb-1" />
-          <div className="text-lg font-bold text-primary">{data.bonus}₪</div>
-          <div className="text-xs text-muted">בונוס</div>
-        </div>
-        <div className="card !p-3 text-center">
-          <DollarSign className="w-5 h-5 text-purple-500 mx-auto mb-1" />
-          <div className="text-lg font-bold text-primary">{data.tips}₪</div>
-          <div className="text-xs text-muted">טיפים</div>
+      <div className="card !p-4 mb-4 bg-gradient-to-bl from-primary to-primary-dark text-white">
+        <div className="text-xs opacity-80 mb-1">הכנסה נטו {PERIOD_LABELS[period]}</div>
+        <div className="text-3xl font-bold mb-2">{t.net.toLocaleString()}₪</div>
+        <div className="text-xs opacity-80">
+          {t.deliveries} משלוחים | עמלה {Math.round(data.commissionRate * 100)}%
         </div>
       </div>
 
-      {/* Avg Per Delivery */}
-      <div className="card !p-4 mb-6 flex items-center justify-between">
-        <span className="text-sm text-muted">ממוצע למשלוח</span>
-        <span className="text-lg font-bold text-primary">
-          {data.deliveries > 0 ? Math.round((data.total - data.bonus - data.tips) / data.deliveries) : 0}₪
-        </span>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <Stat icon={DollarSign} label="עמלה" value={t.commission} color="#10B981" />
+        <Stat icon={TrendingUp} label="בונוסים" value={t.bonus} color="#F59E0B" />
+        <Stat icon={DollarSign} label="טיפים" value={t.tip} color="#3B82F6" />
+        <Stat icon={Package} label="משלוחים" value={t.deliveries} color="#8B5CF6" plain />
       </div>
 
-      {/* Today's Breakdown */}
-      {period === "today" && data.breakdown.length > 0 && (
-        <div>
-          <h2 className="text-lg font-bold text-primary mb-3 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-secondary" />
-            פירוט היום
-          </h2>
+      <div className="card !p-4">
+        <h2 className="text-sm font-bold text-primary mb-3 flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-secondary" />
+          פירוט משלוחים
+        </h2>
+
+        {data.breakdown.length === 0 ? (
+          <div className="text-center py-6 text-muted text-sm">אין משלוחים בתקופה זו</div>
+        ) : (
           <div className="space-y-2">
-            {data.breakdown.map((item) => (
-              <div key={item.id} className="card !p-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
-                    <DollarSign className="w-4 h-4 text-green-600" />
+            {data.breakdown.map((row) => (
+              <div
+                key={row.id}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="font-mono font-bold text-xs text-primary" dir="ltr">
+                    #{row.order_number}
                   </div>
-                  <div>
-                    <div className="text-sm font-medium font-mono" dir="ltr">{item.orderNumber}</div>
-                    <div className="text-xs text-muted">{item.type} | {item.time}</div>
+                  <div className="text-xs text-muted">
+                    {SERVICE_LABELS[row.service_type] ?? row.service_type} ·{" "}
+                    {new Date(row.delivered_at).toLocaleString("he-IL")}
                   </div>
                 </div>
-                <span className="text-lg font-bold text-green-600">+{item.amount}₪</span>
+                <div className="text-right">
+                  <div className="font-bold text-green-700">+{row.commission}₪</div>
+                  <div className="text-xs text-muted">מסה&quot;כ {row.price}₪</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {data.bonuses.length > 0 && (
+        <div className="card !p-4 mt-4">
+          <h2 className="text-sm font-bold text-primary mb-3">בונוסים וטיפים</h2>
+          <div className="space-y-2">
+            {data.bonuses.map((b) => (
+              <div
+                key={b.id}
+                className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded"
+              >
+                <div>
+                  <div className="font-medium">{b.description ?? b.type}</div>
+                  <div className="text-xs text-muted">
+                    {new Date(b.created_at).toLocaleString("he-IL")}
+                  </div>
+                </div>
+                <span
+                  className={`font-bold ${
+                    b.type === "penalty" ? "text-red-600" : "text-green-700"
+                  }`}
+                >
+                  {b.type === "penalty" ? "" : "+"}
+                  {b.amount}₪
+                </span>
               </div>
             ))}
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {period !== "today" && (
-        <div className="text-center py-8 text-muted">
-          <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">פירוט מפורט זמין רק עבור היום</p>
-          <p className="text-xs">לדוח מלא פנו למנהל</p>
+function Stat({
+  icon: Icon,
+  label,
+  value,
+  color,
+  plain,
+}: {
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  label: string;
+  value: number;
+  color: string;
+  plain?: boolean;
+}) {
+  return (
+    <div className="card !p-3 flex items-center gap-2">
+      <Icon className="w-5 h-5" style={{ color }} />
+      <div>
+        <div className="text-base font-bold text-primary">
+          {plain ? value : `${value.toLocaleString()}₪`}
         </div>
-      )}
+        <div className="text-xs text-muted">{label}</div>
+      </div>
     </div>
   );
 }
