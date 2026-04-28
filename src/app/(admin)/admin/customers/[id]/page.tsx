@@ -327,10 +327,20 @@ export default function CustomerDetailPage({
       </div>
 
       <div className="card !p-4">
-        <h2 className="text-sm font-bold text-primary mb-3 flex items-center gap-2">
-          <MessageSquare className="w-4 h-4 text-secondary" />
-          היסטוריית הודעות
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-bold text-primary flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-secondary" />
+            היסטוריית הודעות (ידנית)
+          </h2>
+          {customer.phone && (
+            <Link
+              href={`/admin/conversations/${encodeURIComponent(customer.phone)}`}
+              className="text-xs text-secondary hover:text-secondary-dark"
+            >
+              שיחה מלאה (כולל אוטומטי + בוט) →
+            </Link>
+          )}
+        </div>
         <div className="space-y-2 max-h-72 overflow-y-auto">
           {messages.length === 0 ? (
             <div className="text-center py-4 text-muted text-sm">לא נשלחו הודעות עדיין</div>
