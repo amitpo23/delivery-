@@ -6,6 +6,7 @@ import TrackingMap from "@/components/tracking/TrackingMapWrapper";
 import ComplaintButton from "@/components/tracking/ComplaintButton";
 import FeedbackForm from "@/components/tracking/FeedbackForm";
 import PushToggle from "@/components/push/PushToggle";
+import CustomerChatLauncher from "@/components/chat/CustomerChatLauncher";
 import { ORDER_STATUS_LABELS, type OrderStatus } from "@/types";
 import { COMPANY_SHORT } from "@/constants/services";
 import { formatDate, formatPrice } from "@/lib/utils";
@@ -179,6 +180,12 @@ export default async function TrackPage({
             </div>
 
             <PushToggle />
+
+            {!["delivered", "cancelled", "returned"].includes(result.order.status) && (
+              <div className="card !p-4">
+                <CustomerChatLauncher orderNumber={result.order.order_number} />
+              </div>
+            )}
 
             <div className="card !p-4 flex items-center justify-between">
               <div className="text-sm text-muted">

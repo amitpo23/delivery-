@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Navigation, Phone, Package, MapPin, CheckCircle2 } from "lucide-react";
+import { Navigation, Phone, Package, MapPin, CheckCircle2, MessageSquare } from "lucide-react";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/types";
 import type { OrderStatus } from "@/types";
 import { createClient } from "@/lib/supabase/client";
@@ -240,6 +240,12 @@ export default function DriverTasksPage() {
                     >
                       <Phone className="w-4 h-4" />
                     </a>
+                    <Link
+                      href={`/driver/chat/${order.order_number}`}
+                      className="flex items-center justify-center gap-1.5 py-2.5 px-4 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                    </Link>
 
                     {order.status === "assigned" && (
                       <button
