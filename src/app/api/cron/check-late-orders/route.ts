@@ -23,12 +23,15 @@ export async function GET(req: Request) {
 
   const admin = createAdminClient();
 
-  // Pull all currently-undelivered orders. Filtering "breached" in JS lets
-  // us reuse the slaDeadline() rules without duplicating them in SQL.
+  // Pull all currently-undelivered, *paid* orders. Filtering "breached"
+  // in JS lets us reuse the slaDeadline() rules without duplicating them
+  // in SQL. Unpaid orders are excluded — they live in the payment funnel
+  // and have their own zombie sweep.
   const { data: openOrders, error } = await admin
     .from("orders")
     .select("id, order_number, status, service_type, created_at, customer_id, booker_phone")
     .in("status", ["pending", "confirmed", "assigned", "picked_up", "in_transit"])
+    .eq("payment_status", "paid")
     .limit(500);
 
   if (error) {

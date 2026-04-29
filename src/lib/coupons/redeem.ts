@@ -41,11 +41,17 @@ export async function validateCoupon(args: {
     return { valid: false, reason: `מינימום הזמנה ${coupon.min_order_amount}₪` };
   }
 
+  // Only count successfully-redeemed rows. After migration 021,
+  // /api/payment/begin inserts status='pending' rows up front and the
+  // IPN flips them to 'redeemed' (or 'cancelled' on failure). Counting
+  // pending/cancelled rows would lock users out after a single closed
+  // tab — see PR #38 for the regression that caught this.
   if (coupon.max_total_uses != null) {
     const { count } = await admin
       .from("coupon_redemptions")
       .select("id", { count: "exact", head: true })
-      .eq("coupon_id", coupon.id);
+      .eq("coupon_id", coupon.id)
+      .eq("status", "redeemed");
     if ((count ?? 0) >= coupon.max_total_uses) {
       return { valid: false, reason: "הקוד מוצה" };
     }
@@ -56,7 +62,8 @@ export async function validateCoupon(args: {
       .from("coupon_redemptions")
       .select("id", { count: "exact", head: true })
       .eq("coupon_id", coupon.id)
-      .eq("phone", args.phone);
+      .eq("phone", args.phone)
+      .eq("status", "redeemed");
     if ((count ?? 0) >= coupon.max_per_phone) {
       return { valid: false, reason: "כבר השתמשת בקוד הזה" };
     }

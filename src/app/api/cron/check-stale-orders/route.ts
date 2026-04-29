@@ -29,10 +29,15 @@ export async function GET(req: Request) {
   const admin = createAdminClient();
   const cutoff = new Date(Date.now() - STALE_AFTER_HOURS * 3600 * 1000).toISOString();
 
+  // Only paid orders count as stuck — unpaid orders are still in the
+  // payment funnel (see cancel-zombie-orders for that lane). Without
+  // this filter we'd open auto_pending tickets for every browser that
+  // closed the Sumit hosted page.
   const { data: stale, error } = await admin
     .from("orders")
     .select("id, order_number, customer_id, booker_phone, created_at, status")
     .in("status", ["pending", "confirmed"])
+    .eq("payment_status", "paid")
     .lt("created_at", cutoff)
     .limit(200);
 

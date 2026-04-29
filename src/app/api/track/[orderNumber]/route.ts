@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, getRequestIp } from "@/lib/rate-limit";
 
 const PUBLIC_FIELDS =
-  "id, order_number, status, service_type, pickup_address, delivery_address, time_window, distance_km, estimated_price, created_at, delivered_at, pickup_lat, pickup_lng, delivery_lat, delivery_lng, rating";
+  "id, order_number, status, service_type, pickup_address, delivery_address, time_window, distance_km, estimated_price, created_at, delivered_at, pickup_lat, pickup_lng, delivery_lat, delivery_lng, rating, payment_status";
 
 export async function GET(
   req: Request,
