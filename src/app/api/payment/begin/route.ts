@@ -245,10 +245,14 @@ export async function POST(req: Request) {
     Language: "he",
     RedirectURL: `${site}/booking/return?orderNumber=${orderNumber}`,
     CancelRedirectURL: `${site}/booking?cancelled=${orderNumber}`,
-    IPNURL: `${site}/api/payment/sumit-ipn`,
     ExternalIdentifier: orderNumber,
-    AutomaticallyRedirectToProviderPaymentPage: true,
     Credentials: creds,
+    // IPNURL is configured per-organization in the Sumit dashboard, not
+    // per-call. Sending it here was getting the request rejected as
+    // "Invalid Request JSON" because BeginRedirect_Request doesn't list
+    // the field. AutomaticallyRedirectToProviderPaymentPage was rejected
+    // for the same reason — the swagger example shows it but the schema
+    // does not. Sumit redirects automatically anyway.
   };
 
   type RedirectResponse = {
