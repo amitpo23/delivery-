@@ -240,6 +240,52 @@ export default function BookingPage() {
     if (!quote || !step3Valid()) return;
     setSubmitting(true);
     try {
+      // Live payment: kick off Sumit's hosted page (PCI-safe) and let
+      // it own the redirect. We don't ship card fields anywhere on
+      // our domain. /api/payment/begin creates the order, then returns
+      // the URL we navigate to.
+      const useHostedPayment = process.env.NEXT_PUBLIC_PAYMENT_LIVE === "true";
+
+      if (useHostedPayment) {
+        const res = await fetch("/api/payment/begin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pickupAddress: form.pickupAddress,
+            pickupContactName: form.pickupContactName,
+            pickupContactPhone: form.pickupContactPhone,
+            pickupNotes: form.pickupNotes,
+            deliveryAddress: form.deliveryAddress,
+            deliveryContactName: form.deliveryContactName,
+            deliveryContactPhone: form.deliveryContactPhone,
+            deliveryNotes: form.deliveryNotes,
+            size: form.size,
+            category: form.category,
+            fragile: form.fragile,
+            insurance: form.insurance,
+            declaredValue: form.declaredValue ? Number(form.declaredValue) : undefined,
+            urgency: form.urgency,
+            timeWindow: form.timeWindow,
+            distanceKm,
+            quoteTotal: quote.total,
+            bookerFullName: form.card.holderName,
+            // The booking form doesn't collect a separate booker email
+            // today — Sumit will email the tax invoice using whatever
+            // the customer types into the hosted page. A future PR can
+            // wire up a Step3 email field for our branded confirmation.
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.redirectUrl) {
+          setQuoteError(data?.error ?? "התחלת התשלום נכשלה");
+          return;
+        }
+        window.location.assign(data.redirectUrl);
+        return;
+      }
+
+      // Demo / stub path — keeps the old behaviour when payment is
+      // disabled so devs can test the booking flow end-to-end.
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
