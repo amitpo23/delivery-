@@ -13,6 +13,16 @@ export interface ChargeRequest {
     holderName: string;
     last4?: string;
     token?: string;
+    /**
+     * Direct card fields. Server should never persist these — they're
+     * forwarded to the gateway and discarded. PCI-compliant flows use
+     * `token` (issued by an iframe-hosted page) instead.
+     */
+    number?: string;
+    expMonth?: number;
+    expYear?: number;
+    cvv?: string;
+    citizenId?: string;
   };
   metadata?: Record<string, string>;
   returnUrl?: string;

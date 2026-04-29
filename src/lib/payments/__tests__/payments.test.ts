@@ -49,9 +49,13 @@ describe("SumitProvider (stub mode)", () => {
     await expect(sumit.refundCharge("abc")).rejects.toBeInstanceOf(PaymentError);
   });
 
-  it("live mode (creds present) throws not-implemented", async () => {
-    const sumit = new SumitProvider("real-key", "org-1");
-    await expect(sumit.createCharge(baseReq)).rejects.toBeInstanceOf(PaymentError);
+  it("rejects amount <= 0 with PaymentError", async () => {
+    // Amount validation fires before any network call, so this stays
+    // deterministic regardless of stub-vs-live mode.
+    const sumit = new SumitProvider("real-key", "642076960");
+    await expect(
+      sumit.createCharge({ ...baseReq, amount: 0 }),
+    ).rejects.toBeInstanceOf(PaymentError);
   });
 });
 
