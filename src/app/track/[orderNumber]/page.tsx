@@ -5,6 +5,7 @@ import { Timeline } from "@/components/tracking/Timeline";
 import TrackingMap from "@/components/tracking/TrackingMapWrapper";
 import ComplaintButton from "@/components/tracking/ComplaintButton";
 import FeedbackForm from "@/components/tracking/FeedbackForm";
+import PushToggle from "@/components/push/PushToggle";
 import { ORDER_STATUS_LABELS, type OrderStatus } from "@/types";
 import { COMPANY_SHORT } from "@/constants/services";
 import { formatDate, formatPrice } from "@/lib/utils";
@@ -176,6 +177,8 @@ export default async function TrackPage({
               <h2 className="font-bold text-primary mb-4">סטטוס</h2>
               <Timeline current={result.order.status} events={result.history} />
             </div>
+
+            <PushToggle />
 
             <div className="card !p-4 flex items-center justify-between">
               <div className="text-sm text-muted">
