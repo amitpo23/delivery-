@@ -64,5 +64,30 @@ export async function POST(req: Request) {
     admin
   );
 
+  // Web Push fan-out — best-effort, additive to telegram/whatsapp.
+  // Only fires on real status transitions so an UPDATE that changes notes
+  // doesn't spam every device watching the page.
+  const newRow = (p.record ?? null) as OrderRow | null;
+  const oldRow = (p.old_record ?? null) as OrderRow | null;
+  const transitioned =
+    newRow &&
+    (p.type === "INSERT" || (p.type === "UPDATE" && oldRow?.status !== newRow.status));
+
+  if (transitioned && newRow?.booker_phone) {
+    try {
+      const { sendPush } = await import("@/lib/push/send");
+      await sendPush({
+        audience: { phone: newRow.booker_phone },
+        payload: {
+          title: "עדכון על המשלוח שלך",
+          body: `הזמנה ${newRow.order_number} — סטטוס: ${newRow.status}`,
+          url: `/track/${newRow.order_number}`,
+        },
+      });
+    } catch (err) {
+      console.error("[push] dispatch fan-out failed", err);
+    }
+  }
+
   return NextResponse.json({ ok: true, outcome });
 }
