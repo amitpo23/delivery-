@@ -20,6 +20,7 @@ import {
   History,
   Tag,
   Repeat,
+  Mail,
 } from "lucide-react";
 import { COMPANY_SHORT } from "@/constants/services";
 
@@ -33,6 +34,7 @@ const sidebarLinks = [
   { href: "/admin/customers", label: "לקוחות", icon: Users },
   { href: "/admin/finance", label: "כספים", icon: DollarSign },
   { href: "/admin/coupons", label: "קופונים", icon: Tag },
+  { href: "/admin/campaigns", label: "קמפיינים", icon: Mail },
   { href: "/admin/audit", label: "יומן", icon: History },
   { href: "/admin/settings", label: "הגדרות", icon: Settings },
 ];
