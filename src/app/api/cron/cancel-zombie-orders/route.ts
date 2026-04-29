@@ -46,6 +46,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ scanned: 0, cancelled: 0, cutoff });
   }
 
+  // Race guard: a delayed IPN that flipped the order to 'paid' between
+  // our SELECT and this UPDATE must not be clobbered.
   const { error: updateErr } = await admin
     .from("orders")
     .update({
@@ -53,7 +55,8 @@ export async function GET(req: Request) {
       status: "cancelled",
       cancellation_reason: "תשלום לא הושלם — הסליקה לא חזרה תוך שעה",
     })
-    .in("id", ids);
+    .in("id", ids)
+    .eq("payment_status", "pending");
 
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
