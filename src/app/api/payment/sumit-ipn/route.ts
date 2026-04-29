@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { redeemCoupon } from "@/lib/coupons/redeem";
 import { getCreds, sumitPost } from "@/lib/payments/sumit-client";
 import { getEmailSender } from "@/lib/email/resend";
 import { orderConfirmationEmail } from "@/lib/email/templates";
@@ -43,7 +42,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const { data: order } = await admin
     .from("orders")
-    .select("id, payment_status, payment_transaction_id, booker_email, booker_full_name, pickup_address, delivery_address, final_price, booker_phone")
+    .select("id, payment_status, booker_email, booker_full_name, pickup_address, delivery_address, final_price, booker_phone")
     .eq("order_number", orderNumber)
     .maybeSingle();
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -92,21 +91,14 @@ export async function POST(req: Request) {
   if (status !== 0 || !txn) {
     await admin
       .from("orders")
-      .update({ payment_status: "refunded" })
+      .update({ payment_status: "cancelled", status: "cancelled" })
       .eq("id", order.id);
+    await admin
+      .from("coupon_redemptions")
+      .update({ status: "cancelled" })
+      .eq("order_id", order.id)
+      .eq("status", "pending");
     return NextResponse.json({ ok: true, accepted: false });
-  }
-
-  // Pending coupon stash from /api/payment/begin survives in
-  // payment_transaction_id with the prefix "pending:coupon=...".
-  let couponId: string | null = null;
-  let couponDiscount = 0;
-  if (order.payment_transaction_id?.startsWith("pending:coupon=")) {
-    const m = order.payment_transaction_id.match(/^pending:coupon=([^:]+):(\d+(?:\.\d+)?)$/);
-    if (m) {
-      couponId = m[1];
-      couponDiscount = Number(m[2]);
-    }
   }
 
   await admin
@@ -118,14 +110,14 @@ export async function POST(req: Request) {
     })
     .eq("id", order.id);
 
-  if (couponId && couponDiscount > 0) {
-    await redeemCoupon({
-      couponId,
-      orderId: order.id,
-      phone: order.booker_phone ?? "",
-      amount: couponDiscount,
-    });
-  }
+  // Flip any pending coupon_redemptions row to 'redeemed'. The row was
+  // inserted at /api/payment/begin so admin/coupons could see it as
+  // in-flight. Idempotent: re-running matches zero rows on retry.
+  await admin
+    .from("coupon_redemptions")
+    .update({ status: "redeemed", redeemed_at: new Date().toISOString() })
+    .eq("order_id", order.id)
+    .eq("status", "pending");
 
   // Best-effort confirmation email — Sumit already emails the tax
   // invoice directly when SendDocumentByEmail was true (see PR #36),

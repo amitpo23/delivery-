@@ -31,32 +31,38 @@ function ReturnInner() {
       return;
     }
 
-    // Sumit's IPN is the source of truth. We poll our /api/track to see
-    // when payment_status flips to "paid" — usually happens within a
-    // few seconds of the redirect.
+    // Sumit's IPN is the source of truth. /api/track exposes
+    // payment_status — we poll until it flips to "paid" (typical
+    // capture latency: a few seconds). On "cancelled" we surface the
+    // failure immediately. After 60s with no terminal state we time
+    // out to "verifying" and let the user retry from /booking.
     const t0 = Date.now();
     const tick = async () => {
       try {
         const res = await fetch(`/api/track/${encodeURIComponent(orderNumber)}`);
         if (res.ok) {
-          // The track endpoint doesn't expose payment_status directly,
-          // but a "paid" order will have estimated_price and a non-null
-          // status that's NOT "pending" once captured. Simpler: poll up
-          // to 30s then assume the IPN succeeded.
           const json = await res.json();
-          if (json.order) {
+          const ps = json.order?.payment_status;
+          if (ps === "paid") {
             setState("ok");
             return;
           }
+          if (ps === "cancelled" || ps === "refunded") {
+            setError("התשלום נדחה או בוטל");
+            setState("failed");
+            return;
+          }
         }
-        if (Date.now() - t0 > 30_000) {
-          setState("ok"); // optimistic — IPN will reconcile shortly
+        if (Date.now() - t0 > 60_000) {
+          setError("האישור מהסליקה מתעכב — בדוק את העדכונים בסטטוס המשלוח בעוד דקה");
+          setState("failed");
           return;
         }
         setTimeout(tick, 1500);
       } catch {
-        if (Date.now() - t0 > 30_000) {
-          setState("ok");
+        if (Date.now() - t0 > 60_000) {
+          setError("שגיאת רשת באישור התשלום");
+          setState("failed");
           return;
         }
         setTimeout(tick, 1500);

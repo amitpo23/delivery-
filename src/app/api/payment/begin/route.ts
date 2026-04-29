@@ -182,6 +182,7 @@ export async function POST(req: Request) {
       payment_status: "pending",
       payment_method: "credit_card",
       payment_provider: "sumit",
+      payment_initiated_at: new Date().toISOString(),
     })
     .select("id, order_number")
     .single();
@@ -213,6 +214,7 @@ export async function POST(req: Request) {
         order_id: inserted.id,
         phone: b.pickupContactPhone,
         amount_discounted: couponDiscount,
+        status: "redeemed",
       });
     }
     const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://delivery-rosy-gamma.vercel.app";
@@ -272,12 +274,18 @@ export async function POST(req: Request) {
   } catch (err) {
     const reason = err instanceof SumitApiError ? err.message : "Sumit network error";
     // Attempt cleanup so a failed kickoff doesn't leave a dangling order.
-    await admin.from("orders").update({ payment_status: "refunded" }).eq("id", inserted.id);
+    await admin
+      .from("orders")
+      .update({ payment_status: "cancelled", status: "cancelled" })
+      .eq("id", inserted.id);
     return NextResponse.json({ error: reason }, { status: 502 });
   }
 
   if (response.Status !== 0 || !response.Data?.RedirectURL) {
-    await admin.from("orders").update({ payment_status: "refunded" }).eq("id", inserted.id);
+    await admin
+      .from("orders")
+      .update({ payment_status: "cancelled", status: "cancelled" })
+      .eq("id", inserted.id);
     console.error("[sumit-begin] failed", { status: response.Status, body: response });
     return NextResponse.json(
       {
@@ -289,14 +297,18 @@ export async function POST(req: Request) {
     );
   }
 
-  // Stash coupon intent so the IPN handler / return page can complete it
-  // once the payment actually succeeds. We piggyback in
-  // payment_transaction_id temporarily — overwritten on capture.
+  // Stash coupon intent as a pending coupon_redemptions row so the IPN
+  // handler can flip it to 'redeemed' once the payment actually succeeds.
+  // The unique (coupon_id, order_id) constraint prevents double redemption
+  // on Sumit IPN retries.
   if (couponId && couponDiscount > 0) {
-    await admin
-      .from("orders")
-      .update({ payment_transaction_id: `pending:coupon=${couponId}:${couponDiscount}` })
-      .eq("id", inserted.id);
+    await admin.from("coupon_redemptions").insert({
+      coupon_id: couponId,
+      order_id: inserted.id,
+      phone: b.pickupContactPhone,
+      amount_discounted: couponDiscount,
+      status: "pending",
+    });
   }
 
   return NextResponse.json({
