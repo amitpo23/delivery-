@@ -240,9 +240,11 @@ export async function POST(req: Request) {
       },
     ],
     VATIncluded: true,
-    DocumentType: 1,
+    // DocumentType is an enum string in this endpoint (Invoice / Receipt /
+    // InvoiceAndReceipt / ...), not the integer the charge endpoint takes.
+    // Leave empty so Sumit uses the default for the organisation, which is
+    // already configured to "InvoiceAndReceipt" in our dashboard.
     DocumentDescription: `אליהב משלוחים — ${orderNumber}`,
-    Language: "he",
     RedirectURL: `${site}/booking/return?orderNumber=${orderNumber}`,
     CancelRedirectURL: `${site}/booking?cancelled=${orderNumber}`,
     ExternalIdentifier: orderNumber,
