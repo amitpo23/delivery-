@@ -257,10 +257,13 @@ export async function POST(req: Request) {
     // does not. Sumit redirects automatically anyway.
   };
 
+  // Sumit's BeginRedirect returns { Data: { RedirectURL: "..." } }
+  // (verified against the live API). The swagger example used 'URL' but
+  // the actual response key is RedirectURL.
   type RedirectResponse = {
     Status?: number;
     UserErrorMessage?: string;
-    Data?: { URL?: string; SinglePaymentID?: number };
+    Data?: { RedirectURL?: string; SinglePaymentID?: number };
   };
 
   let response: RedirectResponse;
@@ -273,10 +276,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: reason }, { status: 502 });
   }
 
-  if (response.Status !== 0 || !response.Data?.URL) {
+  if (response.Status !== 0 || !response.Data?.RedirectURL) {
     await admin.from("orders").update({ payment_status: "refunded" }).eq("id", inserted.id);
+    console.error("[sumit-begin] failed", { status: response.Status, body: response });
     return NextResponse.json(
-      { error: response.UserErrorMessage ?? "Sumit refused to start payment" },
+      {
+        error: response.UserErrorMessage ?? "Sumit refused to start payment",
+        sumitStatus: response.Status,
+        sumitData: response.Data ?? null,
+      },
       { status: 502 },
     );
   }
@@ -293,6 +301,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     orderNumber: inserted.order_number,
-    redirectUrl: response.Data.URL,
+    redirectUrl: response.Data.RedirectURL,
   });
 }
