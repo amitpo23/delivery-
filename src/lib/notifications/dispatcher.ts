@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSender } from "./index";
-import type { Channel, NotificationRequest, NotificationTemplate } from "./types";
+import type { Channel, InlineKeyboard, NotificationRequest, NotificationTemplate } from "./types";
+import { driverKeyboardForStatus } from "@/lib/bot/callback";
+import type { OrderStatus } from "@/types";
 
 export interface OrderRow {
   id: string;
@@ -26,6 +28,7 @@ interface PlannedSend {
   template: NotificationTemplate;
   eventId: string;
   payload: Record<string, string | number | null | undefined>;
+  replyMarkup?: InlineKeyboard;
 }
 
 export interface DispatchOutcome {
@@ -98,14 +101,20 @@ async function planSends(
       });
     }
   }
+  const orderForKeyboard = order;
   function addDriver(template: NotificationTemplate) {
     if (!driverChatId) return;
+    const keyboard = driverKeyboardForStatus(
+      orderForKeyboard.id,
+      orderForKeyboard.status as OrderStatus,
+    );
     out.push({
       channel: "telegram",
       recipient: driverChatId,
       template,
       eventId: `${eventBase}:driver:${driverChatId}`,
       payload: sharedPayload,
+      replyMarkup: keyboard ?? undefined,
     });
   }
   function addCustomer(template: NotificationTemplate) {
@@ -136,9 +145,11 @@ async function planSends(
       break;
     case "picked_up":
       addCustomer("order.picked_up");
+      addDriver("order.next_step.driver");
       break;
     case "in_transit":
       addCustomer("order.picked_up");
+      addDriver("order.next_step.driver");
       break;
     case "delivered":
       addCustomer("order.delivered");
@@ -201,6 +212,7 @@ async function runPlans(
       payload: plan.payload,
       eventId: plan.eventId,
       orderId: orderId ?? undefined,
+      replyMarkup: plan.replyMarkup,
     };
 
     let result;
