@@ -8,7 +8,12 @@ export type NotificationTemplate =
   | "order.delivered"
   | "order.cancelled"
   | "order.returned"
-  | "order.pending_admin_attention";
+  | "order.pending_admin_attention"
+  | "order.next_step.driver";
+
+export interface InlineKeyboard {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+}
 
 export interface NotificationRequest {
   template: NotificationTemplate;
@@ -18,6 +23,8 @@ export interface NotificationRequest {
   /** Stable idempotency key — same value across webhook retries. */
   eventId: string;
   orderId?: string;
+  /** Telegram-only: inline keyboard attached to the message. Other channels ignore. */
+  replyMarkup?: InlineKeyboard;
 }
 
 export interface NotificationResult {

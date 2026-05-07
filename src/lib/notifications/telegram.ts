@@ -37,16 +37,20 @@ export class TelegramSender implements NotificationSender {
     }
 
     const url = `https://api.telegram.org/bot${this.token}/sendMessage`;
+    const requestBody: Record<string, unknown> = {
+      chat_id: req.recipient,
+      text,
+      disable_web_page_preview: true,
+    };
+    if (req.replyMarkup) {
+      requestBody.reply_markup = req.replyMarkup;
+    }
     let res: Response;
     try {
       res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: req.recipient,
-          text,
-          disable_web_page_preview: true,
-        }),
+        body: JSON.stringify(requestBody),
       });
     } catch (err) {
       throw new NotificationError("Telegram network error", this.channel, err);

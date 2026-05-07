@@ -59,15 +59,37 @@ export async function POST(req: Request) {
       type: p.type,
       newRow: (p.record ?? null) as OrderRow | null,
       oldRow: (p.old_record ?? null) as OrderRow | null,
-      publicSiteUrl: process.env.PUBLIC_SITE_URL ?? undefined,
+      publicSiteUrl: process.env.PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? undefined,
     },
     admin
   );
 
+  // Visibility — every transition leaves a structured log line in Vercel.
+  // Before this, a misconfigured Vault secret or missing telegram_chat_id
+  // surfaced as silent zero — operators couldn't tell if the trigger was
+  // firing at all. With these lines, "0 sent / N planned" is unambiguous
+  // and points at the right layer (lookup, sender, or downstream).
+  const newRow = (p.record ?? null) as OrderRow | null;
+  console.log("[notifications.dispatch]", {
+    op: p.type,
+    orderId: newRow?.id ?? null,
+    orderNumber: newRow?.order_number ?? null,
+    status: newRow?.status ?? null,
+    planned: outcome.planned,
+    sent: outcome.sent,
+    skipped: outcome.skipped,
+    failed: outcome.failed,
+  });
+  if (outcome.failed > 0) {
+    console.error("[notifications.dispatch] failures", {
+      orderId: newRow?.id ?? null,
+      details: outcome.details.filter((d) => d.status === "failed"),
+    });
+  }
+
   // Web Push fan-out — best-effort, additive to telegram/whatsapp.
   // Only fires on real status transitions so an UPDATE that changes notes
   // doesn't spam every device watching the page.
-  const newRow = (p.record ?? null) as OrderRow | null;
   const oldRow = (p.old_record ?? null) as OrderRow | null;
   const transitioned =
     newRow &&

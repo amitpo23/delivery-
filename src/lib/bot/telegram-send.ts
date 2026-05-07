@@ -24,3 +24,34 @@ export async function sendTelegramMessage(
     throw new Error(`Telegram sendMessage failed: ${res.status} ${body}`);
   }
 }
+
+/**
+ * Acknowledge a callback_query so the Telegram client stops the spinner on
+ * the inline button. Optionally show a small toast (`text`) at the top of
+ * the chat. Telegram requires a response within ~15s of the callback or it
+ * marks the query as expired.
+ */
+export async function answerCallbackQuery(
+  callbackQueryId: string,
+  text?: string,
+  showAlert: boolean = false,
+): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    console.log("[telegram stub] answerCallbackQuery", callbackQueryId, text);
+    return;
+  }
+  const res = await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      callback_query_id: callbackQueryId,
+      text: text ?? "",
+      show_alert: showAlert,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Telegram answerCallbackQuery failed: ${res.status} ${body}`);
+  }
+}

@@ -57,5 +57,10 @@ export function renderMessage(
         title: "הזמנה ממתינה לטיפול",
         body: `הזמנה #${orderNumber} ממתינה לשיבוץ נהג.\nאיסוף: ${pickupAddress}\nמסירה: ${deliveryAddress}`,
       };
+    case "order.next_step.driver":
+      return {
+        title: "הצעד הבא",
+        body: `הזמנה #${orderNumber}\nאיסוף: ${pickupAddress}\nמסירה: ${deliveryAddress}\nבחר את הצעד הבא:`,
+      };
   }
 }
