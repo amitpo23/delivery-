@@ -1,3 +1,7 @@
+interface InlineKeyboard {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+}
+
 /**
  * Outgoing Telegram messages — separate from the
  * notification-channel TelegramSender (src/lib/notifications/telegram.ts)
@@ -7,6 +11,7 @@
 export async function sendTelegramMessage(
   chatId: string | number,
   text: string,
+  options?: { replyMarkup?: InlineKeyboard },
 ): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
@@ -14,15 +19,32 @@ export async function sendTelegramMessage(
     console.log("[telegram stub]", chatId, text.slice(0, 80));
     return;
   }
+  const requestBody: Record<string, unknown> = {
+    chat_id: chatId,
+    text,
+    disable_web_page_preview: false,
+  };
+  if (options?.replyMarkup) {
+    requestBody.reply_markup = options.replyMarkup;
+  }
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: false }),
+    body: JSON.stringify(requestBody),
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Telegram sendMessage failed: ${res.status} ${body}`);
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`Telegram sendMessage failed: ${res.status} ${errBody}`);
   }
+}
+
+/** Convenience wrapper for callers that always want a keyboard. */
+export async function sendTelegramMessageWithKeyboard(
+  chatId: string | number,
+  text: string,
+  replyMarkup: InlineKeyboard,
+): Promise<void> {
+  return sendTelegramMessage(chatId, text, { replyMarkup });
 }
 
 /**
