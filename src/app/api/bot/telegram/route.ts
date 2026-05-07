@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import { handle } from "@/lib/bot/conversation";
 import { loadSession, saveSession } from "@/lib/bot/session";
-import { answerCallbackQuery, sendTelegramMessage } from "@/lib/bot/telegram-send";
+import {
+  answerCallbackQuery,
+  sendTelegramMessage,
+  sendTelegramMessageWithKeyboard,
+} from "@/lib/bot/telegram-send";
 import { handleDriverCallback } from "@/lib/bot/handle-callback";
+import { handleCustomerCallback } from "@/lib/bot/handle-customer-callback";
 import { handleBotCommand, isConnectCommand } from "@/lib/bot/connect";
+import { decodeAnyCallback } from "@/lib/bot/callback";
+import { buildTrackingCard, isTrackingNumber } from "@/lib/bot/customer-tracking";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -44,29 +51,69 @@ export async function POST(req: Request) {
         id?: string;
         from?: { id?: number };
         data?: string;
+        message?: { chat?: { id?: number } };
       };
     };
 
-    // Driver-bot button taps arrive as callback_query (separate from
-    // conversational messages). Route them to the dedicated handler;
-    // the conversation state machine doesn't apply.
+    // Inline-button taps arrive as callback_query. We dispatch to a
+    // namespace-specific handler based on the callback_data prefix:
+    //   "drv:..."  -> driver flow (status updates)
+    //   "cust:..." -> customer flow (refresh/cancel/chat)
+    // Anything else falls through to a rejected ack so a malicious or
+    // outdated client doesn't sit waiting on the spinner.
     if (update.callback_query) {
       const cbId = update.callback_query.id;
       const fromId = update.callback_query.from?.id;
       const data = update.callback_query.data;
+      const messageChat = update.callback_query.message?.chat?.id;
       if (typeof cbId !== "string" || typeof fromId !== "number" || typeof data !== "string") {
         return NextResponse.json({ ok: true, ignored: "malformed-callback" });
       }
       try {
         const supabase = createAdminClient();
-        const outcome = await handleDriverCallback(
-          { callbackId: cbId, chatId: String(fromId), data, raw: update.callback_query },
-          supabase,
-        );
-        try {
-          await answerCallbackQuery(cbId, outcome.ack, outcome.status === "rejected");
-        } catch (err) {
-          console.error("[telegram] answerCallbackQuery failed", err);
+        const decoded = decodeAnyCallback(data);
+        if (!decoded) {
+          await answerCallbackQuery(cbId, "פעולה לא חוקית", true);
+          return NextResponse.json({ ok: true, ignored: "unknown-namespace" });
+        }
+        if (decoded.kind === "driver") {
+          const outcome = await handleDriverCallback(
+            { callbackId: cbId, chatId: String(fromId), data, raw: update.callback_query },
+            supabase,
+          );
+          try {
+            await answerCallbackQuery(cbId, outcome.ack, outcome.status === "rejected");
+          } catch (err) {
+            console.error("[telegram] answerCallbackQuery failed", err);
+          }
+        } else {
+          const outcome = await handleCustomerCallback(
+            {
+              callbackId: cbId,
+              chatId: String(fromId),
+              data,
+              publicSiteUrl: process.env.PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL,
+              raw: update.callback_query,
+            },
+            supabase,
+          );
+          try {
+            await answerCallbackQuery(cbId, outcome.ack, outcome.status === "rejected");
+          } catch (err) {
+            console.error("[telegram] answerCallbackQuery failed", err);
+          }
+          // Customer outcomes carry a follow-up message (refreshed card, link
+          // to chat, post-cancel state). Send it to the same chat the button
+          // was tapped from. messageChat is the chat where the button lives;
+          // fromId is the user — for private bot chats they're equal.
+          if (outcome.replyText) {
+            const replyTarget = typeof messageChat === "number" ? messageChat : fromId;
+            try {
+              await sendTelegramMessage(replyTarget, outcome.replyText);
+            } catch (err) {
+              console.error("[telegram] follow-up send failed", err);
+            }
+          }
         }
       } catch (err) {
         console.error("[telegram] callback handler crashed", err);
@@ -95,11 +142,43 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, ignored: "duplicate-update" });
     }
 
+    const trimmed = text.trim();
+
+    // DEL-XXX from any chat — render the customer status card with inline
+    // buttons (refresh / cancel / chat). This intercepts the tracking number
+    // before it reaches the state machine, which would have just echoed a
+    // /track URL.
+    if (isTrackingNumber(trimmed)) {
+      try {
+        const supabase = createAdminClient();
+        const card = await buildTrackingCard(trimmed, supabase);
+        await saveSession("telegram", externalId, {
+          state: session.state,
+          data: session.data,
+          lastUpdateId: updateIdStr,
+        });
+        if (card.found) {
+          await sendTelegramMessageWithKeyboard(chatId, card.text, card.replyMarkup);
+        } else {
+          await sendTelegramMessage(chatId, card.text);
+        }
+        return NextResponse.json({ ok: true });
+      } catch (err) {
+        console.error("[telegram] tracking lookup crashed", err);
+        try {
+          await sendTelegramMessage(chatId, "שגיאת מערכת. נסו שוב.");
+        } catch {
+          /* ignore */
+        }
+        return NextResponse.json({ ok: true });
+      }
+    }
+
     // /connect, /whoami, /disconnect are admin/driver self-service binding
     // commands — they bypass the booking-conversation state machine entirely
     // because they need DB access (looking up profile by phone) and don't fit
     // the pure-function shape of `handle`.
-    if (isConnectCommand(text.trim())) {
+    if (isConnectCommand(trimmed)) {
       try {
         const supabase = createAdminClient();
         const result = await handleBotCommand(text.trim(), externalId, supabase);
