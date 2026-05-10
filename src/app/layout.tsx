@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Heebo, Inter } from "next/font/google";
+import { Heebo, Inter, Geist } from "next/font/google";
 import "./globals.css";
 import PWARegister from "@/components/PWARegister";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const heebo = Heebo({
   subsets: ["hebrew", "latin"],
@@ -48,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="he" dir="rtl" className={`${heebo.variable} ${inter.variable}`}>
+    <html lang="he" dir="rtl" className={cn(heebo.variable, inter.variable, "font-sans", geist.variable)}>
       <body className="min-h-screen bg-background antialiased">
         {children}
         <PWARegister />

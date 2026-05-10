@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import {
   MapPin,
@@ -14,8 +14,10 @@ import {
   Clock,
   Loader2,
   AlertCircle,
+  ShieldCheck,
 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
+import { SplitShell, type SplitStep } from "@/components/ui/split-shell";
 
 type Step = 1 | 2 | 3;
 type Size = "S" | "M" | "L" | "XL";
@@ -71,12 +73,58 @@ const URGENCY_OPTIONS: { id: Urgency; label: string; sub: string }[] = [
 
 const CATEGORIES = ["מסמכים", "מזון", "אופנה", "אלקטרוניקה", "מוצרי בית", "אחר"];
 
-const TIME_WINDOWS = [
-  "08:00–12:00",
-  "12:00–16:00",
-  "16:00–20:00",
-  "כל היום",
+const TIME_WINDOWS = ["08:00–12:00", "12:00–16:00", "16:00–20:00", "כל היום"];
+
+const COVERAGE = [
+  "חיפה",
+  "עפולה",
+  "מ.א. מגידו",
+  "מ.א. גלבוע",
+  "בקעת בית שאן",
+  "התענכים",
 ];
+
+const STEPS: SplitStep[] = [
+  { num: 1, name: "כתובות", est: "~3 דק׳" },
+  { num: 2, name: "חבילה", est: "2 דק׳" },
+  { num: 3, name: "תשלום", est: "1 דק׳" },
+];
+
+const STEP_PANELS: Record<
+  Step,
+  { eyebrow: string; title: ReactNode; lede: string }
+> = {
+  1: {
+    eyebrow: "שלב 1 מתוך 3 · 5 דקות בלבד",
+    title: (
+      <>
+        בואו נסדר<br />את <span className="text-blue-2">השליחות</span>.
+      </>
+    ),
+    lede:
+      "כתובת איסוף, כתובת מסירה, ופרטי איש קשר בכל קצה. נגיע במדויק וברגע הנכון.",
+  },
+  2: {
+    eyebrow: "שלב 2 מתוך 3",
+    title: (
+      <>
+        מה <span className="text-blue-2">אתם</span> שולחים?
+      </>
+    ),
+    lede:
+      "גודל החבילה, קטגוריה ודחיפות — כך נחשב מחיר הוגן ונבחר את השליח המתאים.",
+  },
+  3: {
+    eyebrow: "שלב 3 מתוך 3 · רגע לסיום",
+    title: (
+      <>
+        סיום <span className="text-blue-2">והזמנה</span>.
+      </>
+    ),
+    lede:
+      "אישור פרטי תשלום, חלון זמן מועדף, וההזמנה יוצאת לדרך. נשלח SMS עם קישור למעקב.",
+  },
+};
 
 const initialState: FormState = {
   pickupAddress: "",
@@ -112,7 +160,9 @@ export default function BookingPage() {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [confirmed, setConfirmed] = useState<{ orderNumber: string } | null>(null);
+  const [confirmed, setConfirmed] = useState<{ orderNumber: string } | null>(
+    null
+  );
 
   // Prefill from query string when arriving from a bot deep-link or the
   // homepage price calculator. Read on mount only — we don't want users
@@ -130,7 +180,8 @@ export default function BookingPage() {
     const deliveryPhone = params.get("deliveryPhone");
     if (from) patch.pickupAddress = from;
     if (to) patch.deliveryAddress = to;
-    if (size === "S" || size === "M" || size === "L" || size === "XL") patch.size = size;
+    if (size === "S" || size === "M" || size === "L" || size === "XL")
+      patch.size = size;
     if (
       urgency === "express" ||
       urgency === "same_day" ||
@@ -206,7 +257,9 @@ export default function BookingPage() {
           urgency: form.urgency,
           fragile: form.fragile,
           insurance: form.insurance,
-          declaredValue: form.declaredValue ? Number(form.declaredValue) : undefined,
+          declaredValue: form.declaredValue
+            ? Number(form.declaredValue)
+            : undefined,
         }),
       });
       const data = await res.json();
@@ -263,16 +316,14 @@ export default function BookingPage() {
             category: form.category,
             fragile: form.fragile,
             insurance: form.insurance,
-            declaredValue: form.declaredValue ? Number(form.declaredValue) : undefined,
+            declaredValue: form.declaredValue
+              ? Number(form.declaredValue)
+              : undefined,
             urgency: form.urgency,
             timeWindow: form.timeWindow,
             distanceKm,
             quoteTotal: quote.total,
             bookerFullName: form.card.holderName,
-            // The booking form doesn't collect a separate booker email
-            // today — Sumit will email the tax invoice using whatever
-            // the customer types into the hosted page. A future PR can
-            // wire up a Step3 email field for our branded confirmation.
           }),
         });
         const data = await res.json();
@@ -302,7 +353,9 @@ export default function BookingPage() {
           category: form.category,
           fragile: form.fragile,
           insurance: form.insurance,
-          declaredValue: form.declaredValue ? Number(form.declaredValue) : undefined,
+          declaredValue: form.declaredValue
+            ? Number(form.declaredValue)
+            : undefined,
           urgency: form.urgency,
           timeWindow: form.timeWindow,
           distanceKm,
@@ -324,55 +377,121 @@ export default function BookingPage() {
     }
   }
 
+  // ────────────────────────────────────────────
+  // Confirmation screen
+  // ────────────────────────────────────────────
   if (confirmed) {
     return (
-      <div className="max-w-lg mx-auto text-center py-10">
-        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
-          <CheckCircle2 className="w-10 h-10 text-green-600" />
-        </div>
-        <h1 className="text-3xl font-bold text-primary mb-2">ההזמנה אושרה!</h1>
-        <p className="text-muted mb-4">קישור למעקב נשלח אליך ב־SMS</p>
-        <div className="card !p-6 my-6">
-          <div className="text-sm text-muted mb-1">מספר הזמנה</div>
-          <div className="text-2xl font-bold text-primary" dir="ltr">
-            {confirmed.orderNumber}
+      <div className="grid min-h-screen place-items-center bg-paper px-4 py-12">
+        <div className="w-full max-w-md text-center">
+          <div className="mx-auto mb-6 grid h-20 w-20 place-items-center rounded-full bg-blue-tint">
+            <CheckCircle2 className="h-10 w-10 text-blue" />
           </div>
-        </div>
-        <div className="flex gap-3 justify-center flex-wrap">
-          <Link href={`/track/${confirmed.orderNumber}`} className="btn-primary">
-            מעקב חי
-          </Link>
-          <Link href="/" className="btn-secondary">
-            לעמוד הראשי
-          </Link>
+          <h1 className="mb-2 text-3xl font-extrabold tracking-tight text-ink">
+            ההזמנה אושרה!
+          </h1>
+          <p className="mb-6 text-ink-soft">קישור למעקב נשלח אליך ב־SMS</p>
+          <div className="card mb-6 !p-6">
+            <div className="mb-1 text-sm text-mute">מספר הזמנה</div>
+            <div
+              className="text-2xl font-extrabold tracking-tight text-ink"
+              dir="ltr"
+            >
+              {confirmed.orderNumber}
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link
+              href={`/track/${confirmed.orderNumber}`}
+              className="btn-primary"
+            >
+              מעקב חי
+            </Link>
+            <Link href="/" className="btn-secondary">
+              לעמוד הראשי
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
 
   // Show the demo banner unless we've explicitly flipped to live mode in env.
-  // Default to "demo" so a fresh deploy without Sumit/Grow keys can't claim
-  // it charged a real card.
   const isLivePayment = process.env.NEXT_PUBLIC_PAYMENT_LIVE === "true";
 
-  return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl md:text-3xl font-bold text-primary mb-2">הזמנת משלוח</h1>
-      <p className="text-muted mb-6">3 שלבים, בלי הרשמה</p>
+  const panel = STEP_PANELS[step];
+  const progressPct = step === 1 ? 33 : step === 2 ? 66 : 100;
 
+  return (
+    <SplitShell
+      step={step}
+      steps={STEPS}
+      panelEyebrow={panel.eyebrow}
+      panelTitle={panel.title}
+      panelLede={panel.lede}
+      panelExtra={
+        <div>
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky/80">
+            אזורי שירות
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {COVERAGE.map((c) => (
+              <span
+                key={c}
+                className="inline-flex items-center rounded-md border border-white/15 bg-white/5 px-2.5 py-1 text-[12.5px] font-medium text-white/85"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        </div>
+      }
+      topRight={
+        <>
+          <span className="inline-flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.15)]" />
+            שירות פעיל בצפון
+          </span>
+          <span>
+            צריכים עזרה?{" "}
+            <a
+              href="tel:0500000000"
+              className="border-b border-hairline-2 pb-px text-ink hover:border-ink"
+            >
+              04-000-0000
+            </a>
+          </span>
+        </>
+      }
+    >
       {!isLivePayment && (
-        <div className="card !p-3 mb-4 bg-amber-50 border-amber-300 flex items-start gap-2">
-          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2 rounded-[10px] border border-amber-300 bg-amber-50 p-3">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <div className="text-sm text-amber-900">
-            <strong>מצב הדגמה.</strong> תשלום לא נגבה בפועל וההודעות לא נשלחות בפועל.
+            <strong>מצב הדגמה.</strong> תשלום לא נגבה בפועל וההודעות לא נשלחות.
             ההזמנה תיווצר במערכת לצורך בדיקה.
           </div>
         </div>
       )}
 
-      <StepsIndicator current={step} />
+      <header>
+        <h2 className="m-0 mb-1 text-2xl font-extrabold tracking-tight text-ink">
+          {step === 1
+            ? "פרטי האיסוף והמסירה"
+            : step === 2
+            ? "פרטי החבילה"
+            : "תשלום ואישור"}
+        </h2>
+        <p className="m-0 text-[15px] text-ink-soft">
+          {step === 1
+            ? "כל מה שנצטרך כדי להגיע אליכם בדיוק."
+            : step === 2
+            ? "נתאים מחיר ושליח לפי מה שנשלח."
+            : "פרטי כרטיס וחלון זמן מועדף."}
+        </p>
+      </header>
 
-      <div className="card !p-6 md:!p-8">
+      <div>
         {step === 1 && <Step1Addresses form={form} update={update} />}
         {step === 2 && <Step2Package form={form} update={update} />}
         {step === 3 && (
@@ -384,15 +503,33 @@ export default function BookingPage() {
             quoteError={quoteError}
           />
         )}
+      </div>
 
-        <div className="flex justify-between items-center mt-8 pt-6 border-t border-border gap-3">
+      {/* Action row */}
+      <div className="mt-auto flex flex-col gap-4 border-t border-hairline pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 text-[13px] font-medium text-mute">
+          <div className="relative h-1 w-48 overflow-hidden rounded-full bg-hairline">
+            <div
+              className="absolute inset-y-0 right-0 bg-blue transition-[width] duration-500"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <span>
+            <b className="text-ink">{progressPct}%</b> · שלב {step}/3
+          </span>
+        </div>
+
+        <div className="flex gap-2.5">
           {step > 1 ? (
             <button onClick={back} className="btn-secondary">
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="h-4 w-4" />
               חזרה
             </button>
           ) : (
-            <Link href="/" className="text-sm text-muted hover:text-primary">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 px-3 text-sm font-semibold text-ink-soft hover:text-ink"
+            >
               ← ביטול
             </Link>
           )}
@@ -400,67 +537,38 @@ export default function BookingPage() {
           {step < 3 ? (
             <button
               onClick={next}
-              disabled={(step === 1 && !step1Valid()) || (step === 2 && !step2Valid())}
-              className="btn-primary disabled:opacity-50"
+              disabled={
+                (step === 1 && !step1Valid()) ||
+                (step === 2 && !step2Valid())
+              }
+              className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
-              הבא
-              <ArrowLeft className="w-4 h-4" />
+              {step === 1 ? "המשך אל החבילה" : "המשך אל התשלום"}
+              <ArrowLeft className="h-4 w-4" />
             </button>
           ) : (
             <button
               onClick={submit}
               disabled={!quote || !step3Valid() || submitting}
-              className="btn-primary !bg-green-600 hover:!bg-green-700 disabled:opacity-50 !py-3 !px-6"
+              className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
-                <CheckCircle2 className="w-5 h-5" />
+                <ShieldCheck className="h-5 w-5" />
               )}
               אישור הזמנה {quote ? `· ${formatPrice(quote.total)}` : ""}
             </button>
           )}
         </div>
       </div>
-    </div>
+    </SplitShell>
   );
 }
 
-function StepsIndicator({ current }: { current: Step }) {
-  const items: { n: Step; label: string; icon: typeof MapPin }[] = [
-    { n: 1, label: "כתובות", icon: MapPin },
-    { n: 2, label: "חבילה", icon: Package },
-    { n: 3, label: "תשלום", icon: CreditCard },
-  ];
-  return (
-    <div className="flex items-center justify-between mb-6">
-      {items.map((it, i) => {
-        const Icon = it.icon;
-        const done = it.n < current;
-        const active = it.n === current;
-        return (
-          <div key={it.n} className="flex items-center flex-1">
-            <div className="flex flex-col items-center">
-              <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  done ? "bg-accent text-white" : active ? "bg-secondary text-white" : "bg-gray-200 text-gray-400"
-                }`}
-              >
-                {done ? <CheckCircle2 className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
-              </div>
-              <span className={`text-xs mt-1 ${active ? "text-secondary font-medium" : "text-muted"}`}>
-                {it.label}
-              </span>
-            </div>
-            {i < items.length - 1 && (
-              <div className={`flex-1 h-0.5 mx-2 ${it.n < current ? "bg-accent" : "bg-gray-200"}`} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+// ──────────────────────────────────────────────────
+// Step components
+// ──────────────────────────────────────────────────
 
 function Step1Addresses({
   form,
@@ -470,72 +578,88 @@ function Step1Addresses({
   update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <Section title="איסוף" icon={MapPin}>
-        <Input
-          label="כתובת איסוף"
-          value={form.pickupAddress}
-          onChange={(v) => update("pickupAddress", v)}
-          placeholder="עיר, רחוב, מספר בית"
-          required
-        />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Input
-            label="שם איש קשר"
-            value={form.pickupContactName}
-            onChange={(v) => update("pickupContactName", v)}
-            icon={User}
+        <Field label="כתובת איסוף" required>
+          <input
+            value={form.pickupAddress}
+            onChange={(e) => update("pickupAddress", e.target.value)}
+            placeholder="עיר, רחוב, מספר בית"
+            className="input-field"
             required
           />
-          <Input
-            label="טלפון"
-            value={form.pickupContactPhone}
-            onChange={(v) => update("pickupContactPhone", v)}
-            icon={Phone}
-            type="tel"
-            ltr
-            required
-          />
+        </Field>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label="שם איש קשר" icon={User} required>
+            <input
+              value={form.pickupContactName}
+              onChange={(e) => update("pickupContactName", e.target.value)}
+              placeholder="שם מלא"
+              className="input-field"
+              required
+            />
+          </Field>
+          <Field label="טלפון" icon={Phone} required>
+            <input
+              type="tel"
+              value={form.pickupContactPhone}
+              onChange={(e) => update("pickupContactPhone", e.target.value)}
+              placeholder="050-000-0000"
+              className="input-field"
+              dir="ltr"
+              required
+            />
+          </Field>
         </div>
-        <Input
-          label="הערות לשליח (אופציונלי)"
-          value={form.pickupNotes}
-          onChange={(v) => update("pickupNotes", v)}
-          placeholder="קומה, דירה, קוד כניסה..."
-        />
+        <Field label="הערות לשליח" optional>
+          <input
+            value={form.pickupNotes}
+            onChange={(e) => update("pickupNotes", e.target.value)}
+            placeholder="קומה, דירה, קוד כניסה..."
+            className="input-field"
+          />
+        </Field>
       </Section>
 
       <Section title="מסירה" icon={MapPin}>
-        <Input
-          label="כתובת יעד"
-          value={form.deliveryAddress}
-          onChange={(v) => update("deliveryAddress", v)}
-          placeholder="עיר, רחוב, מספר בית"
-          required
-        />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Input
-            label="שם מקבל"
-            value={form.deliveryContactName}
-            onChange={(v) => update("deliveryContactName", v)}
-            icon={User}
+        <Field label="כתובת יעד" required>
+          <input
+            value={form.deliveryAddress}
+            onChange={(e) => update("deliveryAddress", e.target.value)}
+            placeholder="עיר, רחוב, מספר בית"
+            className="input-field"
             required
           />
-          <Input
-            label="טלפון מקבל"
-            value={form.deliveryContactPhone}
-            onChange={(v) => update("deliveryContactPhone", v)}
-            icon={Phone}
-            type="tel"
-            ltr
-            required
-          />
+        </Field>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label="שם מקבל" icon={User} required>
+            <input
+              value={form.deliveryContactName}
+              onChange={(e) => update("deliveryContactName", e.target.value)}
+              placeholder="שם מלא"
+              className="input-field"
+              required
+            />
+          </Field>
+          <Field label="טלפון מקבל" icon={Phone} required>
+            <input
+              type="tel"
+              value={form.deliveryContactPhone}
+              onChange={(e) => update("deliveryContactPhone", e.target.value)}
+              placeholder="050-000-0000"
+              className="input-field"
+              dir="ltr"
+              required
+            />
+          </Field>
         </div>
-        <Input
-          label="הערות מסירה (אופציונלי)"
-          value={form.deliveryNotes}
-          onChange={(v) => update("deliveryNotes", v)}
-        />
+        <Field label="הערות מסירה" optional>
+          <input
+            value={form.deliveryNotes}
+            onChange={(e) => update("deliveryNotes", e.target.value)}
+            className="input-field"
+          />
+        </Field>
       </Section>
     </div>
   );
@@ -549,31 +673,34 @@ function Step2Package({
   update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">גודל חבילה</label>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <label className="mb-2 block text-sm font-semibold text-ink">
+          גודל חבילה
+        </label>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {(Object.keys(SIZE_LABELS) as Size[]).map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => update("size", s)}
-              className={`p-3 rounded-xl border-2 text-right transition-all ${
+              className={`rounded-[10px] border p-3 text-right transition-all ${
                 form.size === s
-                  ? "border-secondary bg-secondary/5"
-                  : "border-border hover:border-gray-300"
+                  ? "border-blue bg-blue-tint-2 shadow-[0_0_0_4px_rgba(30,99,242,0.10)]"
+                  : "border-hairline-2 hover:border-mute"
               }`}
             >
-              <div className="font-bold text-sm text-primary">{SIZE_LABELS[s].label}</div>
-              <div className="text-xs text-muted mt-1">{SIZE_LABELS[s].hint}</div>
+              <div className="text-sm font-bold text-ink">
+                {SIZE_LABELS[s].label}
+              </div>
+              <div className="mt-1 text-xs text-mute">{SIZE_LABELS[s].hint}</div>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">קטגוריה</label>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field label="קטגוריה">
           <select
             value={form.category}
             onChange={(e) => update("category", e.target.value)}
@@ -585,9 +712,8 @@ function Step2Package({
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">דחיפות</label>
+        </Field>
+        <Field label="דחיפות">
           <select
             value={form.urgency}
             onChange={(e) => update("urgency", e.target.value as Urgency)}
@@ -599,43 +725,47 @@ function Step2Package({
               </option>
             ))}
           </select>
-        </div>
+        </Field>
       </div>
 
       <div className="space-y-3">
-        <label className="flex items-center gap-3 p-3 border border-border rounded-xl cursor-pointer hover:border-gray-300">
+        <label className="flex cursor-pointer items-center gap-3 rounded-[10px] border border-hairline-2 p-3 transition-colors hover:border-mute">
           <input
             type="checkbox"
             checked={form.fragile}
             onChange={(e) => update("fragile", e.target.checked)}
+            className="h-4 w-4 accent-blue"
           />
           <div>
-            <div className="font-medium text-sm">חבילה שבירה</div>
-            <div className="text-xs text-muted">תוספת ₪15 לטיפול בעדינות</div>
+            <div className="text-sm font-semibold text-ink">חבילה שבירה</div>
+            <div className="text-xs text-mute">תוספת ₪15 לטיפול בעדינות</div>
           </div>
         </label>
 
-        <label className="flex items-center gap-3 p-3 border border-border rounded-xl cursor-pointer hover:border-gray-300">
+        <label className="flex cursor-pointer items-center gap-3 rounded-[10px] border border-hairline-2 p-3 transition-colors hover:border-mute">
           <input
             type="checkbox"
             checked={form.insurance}
             onChange={(e) => update("insurance", e.target.checked)}
+            className="h-4 w-4 accent-blue"
           />
           <div className="flex-1">
-            <div className="font-medium text-sm">ביטוח חבילה</div>
-            <div className="text-xs text-muted">2% מהערך המוצהר, מינימום ₪5</div>
+            <div className="text-sm font-semibold text-ink">ביטוח חבילה</div>
+            <div className="text-xs text-mute">2% מהערך המוצהר, מינימום ₪5</div>
           </div>
         </label>
 
         {form.insurance && (
-          <Input
-            label="ערך מוצהר (₪)"
-            value={form.declaredValue}
-            onChange={(v) => update("declaredValue", v)}
-            type="number"
-            ltr
-            required
-          />
+          <Field label="ערך מוצהר (₪)" required>
+            <input
+              type="number"
+              value={form.declaredValue}
+              onChange={(e) => update("declaredValue", e.target.value)}
+              dir="ltr"
+              className="input-field"
+              required
+            />
+          </Field>
         )}
       </div>
     </div>
@@ -656,22 +786,22 @@ function Step3Pay({
   quoteError: string | null;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          <Clock className="w-4 h-4 inline ml-1" />
+        <label className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+          <Clock className="h-4 w-4 text-blue" />
           חלון זמן מועדף
         </label>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {TIME_WINDOWS.map((tw) => (
             <button
               key={tw}
               type="button"
               onClick={() => update("timeWindow", tw)}
-              className={`px-3 py-2 rounded-lg border-2 text-sm ${
+              className={`rounded-[10px] border px-3 py-2.5 text-sm font-medium transition-all ${
                 form.timeWindow === tw
-                  ? "border-secondary bg-secondary/5 text-secondary font-medium"
-                  : "border-border text-gray-700"
+                  ? "border-blue bg-blue-tint-2 text-ink"
+                  : "border-hairline-2 text-ink-soft hover:border-mute"
               }`}
             >
               {tw}
@@ -683,43 +813,65 @@ function Step3Pay({
       <QuoteCard quote={quote} loading={quoteLoading} error={quoteError} />
 
       <div className="space-y-3">
-        <h3 className="font-bold text-primary">פרטי תשלום</h3>
-        <Input
-          label="שם בעל הכרטיס"
-          value={form.card.holderName}
-          onChange={(v) => update("card", { ...form.card, holderName: v })}
-          required
-        />
-        <Input
-          label="מספר כרטיס"
-          value={form.card.number}
-          onChange={(v) => update("card", { ...form.card, number: v })}
-          placeholder="0000 0000 0000 0000"
-          ltr
-          required
-        />
+        <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-ink-soft">
+          פרטי תשלום
+        </h3>
+        <Field label="שם בעל הכרטיס" required>
+          <input
+            value={form.card.holderName}
+            onChange={(e) =>
+              update("card", { ...form.card, holderName: e.target.value })
+            }
+            className="input-field"
+            required
+          />
+        </Field>
+        <Field label="מספר כרטיס" required>
+          <input
+            value={form.card.number}
+            onChange={(e) =>
+              update("card", { ...form.card, number: e.target.value })
+            }
+            placeholder="0000 0000 0000 0000"
+            dir="ltr"
+            className="input-field"
+            required
+          />
+        </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Input
-            label="תוקף (MM/YY)"
-            value={form.card.exp}
-            onChange={(v) => update("card", { ...form.card, exp: v })}
-            placeholder="12/27"
-            ltr
-            required
-          />
-          <Input
-            label="CVV"
-            value={form.card.cvv}
-            onChange={(v) => update("card", { ...form.card, cvv: v })}
-            type="password"
-            ltr
-            required
-          />
+          <Field label="תוקף (MM/YY)" required>
+            <input
+              value={form.card.exp}
+              onChange={(e) =>
+                update("card", { ...form.card, exp: e.target.value })
+              }
+              placeholder="12/27"
+              dir="ltr"
+              className="input-field"
+              required
+            />
+          </Field>
+          <Field label="CVV" required>
+            <input
+              type="password"
+              value={form.card.cvv}
+              onChange={(e) =>
+                update("card", { ...form.card, cvv: e.target.value })
+              }
+              dir="ltr"
+              className="input-field"
+              required
+            />
+          </Field>
         </div>
       </div>
     </div>
   );
 }
+
+// ──────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────
 
 function QuoteCard({
   quote,
@@ -732,31 +884,37 @@ function QuoteCard({
 }) {
   if (loading) {
     return (
-      <div className="p-4 bg-gray-50 rounded-xl flex items-center gap-2 text-muted">
-        <Loader2 className="w-4 h-4 animate-spin" />
+      <div className="flex items-center gap-2 rounded-[12px] border border-hairline bg-paper p-4 text-mute">
+        <Loader2 className="h-4 w-4 animate-spin" />
         מחשב מחיר...
       </div>
     );
   }
   if (error) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2">
-        <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+      <div className="flex items-start gap-2 rounded-[12px] border border-red-200 bg-red-50 p-4">
+        <AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
         <div className="text-sm text-red-800">{error}</div>
       </div>
     );
   }
   if (!quote) return null;
   return (
-    <div className="p-4 bg-green-50 border-2 border-green-200 rounded-xl">
-      <div className="flex justify-between items-center mb-3">
-        <span className="font-bold text-green-900">סה״כ לתשלום</span>
-        <span className="text-3xl font-bold text-green-900">{formatPrice(quote.total)}</span>
+    <div className="rounded-[14px] border border-blue/25 bg-gradient-to-br from-blue-tint-2 to-blue-tint p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-sm font-semibold text-ink-soft">סה״כ לתשלום</span>
+        <span className="text-3xl font-extrabold tracking-tight text-ink">
+          {formatPrice(quote.total)}
+        </span>
       </div>
-      <div className="text-xs text-green-800/80 space-y-0.5">
-        <div>אזור איסוף: {quote.breakdown.pickupZone} · מסירה: {quote.breakdown.deliveryZone}</div>
+      <div className="space-y-1 text-xs text-ink-soft/85">
         <div>
-          סכום ביניים {formatPrice(quote.subtotal)} · מע״מ {formatPrice(quote.vat)}
+          אזור איסוף: {quote.breakdown.pickupZone} · מסירה:{" "}
+          {quote.breakdown.deliveryZone}
+        </div>
+        <div>
+          סכום ביניים {formatPrice(quote.subtotal)} · מע״מ{" "}
+          {formatPrice(quote.vat)}
         </div>
       </div>
     </div>
@@ -773,51 +931,42 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-3">
-      <h2 className="text-lg font-bold text-primary flex items-center gap-2">
-        <Icon className="w-5 h-5 text-secondary" />
+    <div className="space-y-3.5">
+      <h3 className="flex items-center gap-2 text-base font-bold text-ink">
+        <Icon className="h-4 w-4 text-blue" />
         {title}
-      </h2>
-      {children}
+      </h3>
+      <div className="space-y-3.5">{children}</div>
     </div>
   );
 }
 
-function Input({
+function Field({
   label,
-  value,
-  onChange,
-  placeholder,
   required,
-  type = "text",
-  ltr,
+  optional,
   icon: Icon,
+  children,
 }: {
   label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
   required?: boolean;
-  type?: string;
-  ltr?: boolean;
+  optional?: boolean;
   icon?: typeof MapPin;
+  children: React.ReactNode;
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {Icon && <Icon className="w-3 h-3 inline ml-1" />}
-        {label}
-        {required && " *"}
+      <label className="mb-1 flex items-center justify-between text-[13px] font-semibold text-ink">
+        <span className="flex items-center gap-1.5">
+          {Icon && <Icon className="h-3.5 w-3.5 text-mute" />}
+          {label}
+          {required && <span className="text-blue">*</span>}
+        </span>
+        {optional && (
+          <span className="text-xs font-medium text-mute">לא חובה</span>
+        )}
       </label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="input-field"
-        placeholder={placeholder}
-        dir={ltr ? "ltr" : undefined}
-        required={required}
-      />
+      {children}
     </div>
   );
 }
