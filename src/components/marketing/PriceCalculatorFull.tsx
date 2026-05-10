@@ -167,8 +167,7 @@ export default function PriceCalculatorFull() {
                 href={`/booking?from=${encodeURIComponent(
                   from
                 )}&to=${encodeURIComponent(to)}`}
-                className="mt-auto inline-flex items-center justify-center gap-2 rounded-[10px] bg-blue-bright px-5 py-3.5 text-base font-bold text-white shadow-[0_10px_30px_rgba(30,99,242,0.45)] transition-all hover:-translate-y-px hover:shadow-[0_14px_36px_rgba(30,99,242,0.55)]"
-                style={{ backgroundColor: "#1E63F2" }}
+                className="mt-auto inline-flex items-center justify-center gap-2 rounded-[10px] bg-blue px-5 py-3.5 text-base font-bold text-white shadow-[0_10px_30px_rgba(30,99,242,0.45)] transition-all hover:-translate-y-px hover:shadow-[0_14px_36px_rgba(30,99,242,0.55)]"
               >
                 המשך להזמנה
                 <ArrowLeft className="h-4 w-4" />
